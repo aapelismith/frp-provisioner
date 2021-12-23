@@ -2,6 +2,7 @@ package clientset
 
 import (
 	"errors"
+	"fmt"
 	"github.com/spf13/pflag"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -34,7 +35,7 @@ func (o *Options) Validate() error {
 
 		_, err := os.Stat(o.KubeConfig)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable stat file %s,got: %v", o.KubeConfig, err)
 		}
 	}
 	return nil

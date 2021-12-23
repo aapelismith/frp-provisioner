@@ -1,0 +1,128 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pharos-lb-controller
+  namespace: kube-system
+  labels:
+    app: pharos-lb-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pharos-lb-controller
+  template:
+    metadata:
+      labels:
+        app: pharos-lb-controller
+    spec:
+      containers:
+        - command:
+            - /bin/loadbalancer
+            - --config
+            - /etc/config/loadbalancer.yaml
+          image: aapelismith/pharos-lb-controller:latest
+          imagePullPolicy: IfNotPresent
+          name: pharos-lb-controller
+          volumeMounts:
+            - mountPath: /etc/config/loadbalancer.yaml
+              name: config-volume
+              subPath: loadbalancer.yaml
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      serviceAccount: pharos-lb-controller
+      serviceAccountName: pharos-lb-controller
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - configMap:
+            defaultMode: 420
+            name: pharos-lb-config
+          name: config-volume
+
+---
+apiVersion: v1
+data:
+  loadbalancer.yaml: |
+    # Log log related configuration
+    log:
+      # log level, optional value trace,info,warn,error,panic,fatal
+      level: trace
+      # caller encoder optional: long, short
+      caller: long
+      # log encoder, optional: text, json
+      format: text
+      # time encoder eg: RFC3339 , RFC3339NANO, RFC822, RFC850, RFC1123, STAMP
+      time: rfc3339
+      # log file path
+      # file: ./compass.log
+
+    # Domain name suffix related configuration
+    load_balancer:
+      #  Domain name suffix, For example, if the suffix is .lb.kunstack.com,
+      # please make sure that *.lb.kunstack.com has been resolved to your edge node
+      domain_suffix: .lb.kunstack.com
+kind: ConfigMap
+metadata:
+  name: pharos-lb-config
+  namespace: kube-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: pharos-lb-controller
+  name: pharos-lb-controller
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - services
+      - services/status
+      - events
+    verbs:
+      - get
+      - list
+      - create
+      - delete
+      - deletecollection
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - daemonsets
+    verbs:
+      - list
+      - get
+      - create
+      - delete
+      - deletecollection
+      - patch
+      - update
+      - watch
+
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pharos-lb-controller
+  namespace: kube-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: pharos-lb-controller
+  name: pharos-lb-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pharos-lb-controller
+subjects:
+  - kind: ServiceAccount
+    name: pharos-lb-controller
+    namespace: kube-system

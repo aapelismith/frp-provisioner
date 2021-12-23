@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . .
 RUN GOOS=linux ARCH=amd64 go build -o /bin/loadbalancer cmd/loadbalancer/main.go
 
-FROM alpine AS lb-controller
+FROM debian:stretch-slim AS lb-controller
 COPY --from=builder /bin/loadbalancer  /bin/loadbalancer
 COPY --from=builder /app/config/loadbalancer.yaml  /etc/loadbalancer.yaml
 ENTRYPOINT ["/bin/loadbalancer"]
