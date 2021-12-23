@@ -1,0 +1,18 @@
+# Log log related configuration
+log:
+  # log level, optional value trace,info,warn,error,panic,fatal
+  level: trace
+  # caller encoder optional: long, short
+  caller: long
+  # log encoder, optional: text, json
+  format: text
+  # time encoder eg: RFC3339 , RFC3339NANO, RFC822, RFC850, RFC1123, STAMP
+  time: rfc3339
+  # log file path
+  # file: ./compass.log
+
+# Domain name suffix related configuration
+load_balancer:
+  #  Domain name suffix, For example, if the suffix is .lb.kunstack.com,
+  # please make sure that *.lb.kunstack.com has been resolved to your edge node
+  domain_suffix: .lb.kunstack.com
