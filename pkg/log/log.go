@@ -14,9 +14,10 @@
 package log
 
 import (
-	"bufio"
 	"context"
 	"fmt"
+	"github.com/go-logr/logr"
+	"go.uber.org/atomic"
 	"io"
 	"os"
 	"runtime"
@@ -29,7 +30,7 @@ import (
 const (
 	loggerKey = loggerKeyType("logger-key")
 	// TraceLevel trace level
-	TraceLevel Level = iota << 1
+	TraceLevel Level = iota
 	// DebugLevel when the log is set to Debug, all logs below this level will not be output
 	DebugLevel
 	// InfoLevel when the log is set to Info, all logs below this level will not be output
@@ -44,17 +45,19 @@ const (
 	FatalLevel
 	// OffLevel when the log is set to off level, all levels of logs will not be output
 	OffLevel
-	// the size of the default buffer 4k
-	defaultBufSize = 4096
-	//flush the buffer interval
-	defaultFlushInterval = time.Second * 5
 )
 
 var (
-	std Interface = New(os.Stderr)
-	_   Interface = &Logger{}
-	_   Interface = &FiledLogger{}
+	std atomic.Value
+	_   Interface    = &Logger{}
+	_   Interface    = &FiledLogger{}
+	_   logr.LogSink = &sink{}
+	_   io.Writer    = &safeWriter{}
 )
+
+func init() {
+	std.Store(New(os.Stderr))
+}
 
 type (
 	loggerKeyType string
@@ -65,29 +68,37 @@ type (
 	// CallerEncoder Used to format the call stack
 	CallerEncoder func(file string, line int) string
 	// Option Log options
-	Option func(l *config)
+	Option func(l *Logger)
 )
+
+// safeWriter thread-safe writer
+type safeWriter struct {
+	out    io.Writer
+	locker sync.Mutex
+}
+
+func (w *safeWriter) Write(p []byte) (n int, err error) {
+	w.locker.Lock()
+	defer w.locker.Unlock()
+	return w.out.Write(p)
+}
 
 // Interface logger with field
 type Interface interface {
-	WithField(key string, value ...string) Interface
-	WithFields(fields Fields) Interface
+	WithFields(fields ...interface{}) Interface
 	WithError(err error) Interface
-	WithFloat64Field(key string, value ...float64) Interface
-	WithFloat32Field(key string, value ...float32) Interface
-	WithInt64Field(key string, value ...int64) Interface
-	WithIntField(key string, value ...int) Interface
-	WithBoolField(key string, value ...bool) Interface
-	WithDurationField(key string, value ...time.Duration) Interface
-	SetOutput(out io.Writer)
-	SetLevel(level Level)
-	SetEncoder(Encoder)
-	SetTimeEncoder(TimeEncoder)
-	SetCallerEncoder(CallerEncoder)
-	Output(level Level, calldepth int, fileds Fields, s string) error
-	WithContext(ctx context.Context, opts ...func(Fields)) context.Context
+	WithOutput(out io.Writer) Interface
+	WithLevel(level Level) Interface
+	WithEncoder(Encoder) Interface
+	WithTimeEncoder(TimeEncoder) Interface
+	WithMaxVerbosity(verbosity int) Interface
+	WithCallerEncoder(CallerEncoder) Interface
+	V(v int) Interface
+	Verbosity() int
+	Output(v int, level Level, callDepth int, fields Fields, s string) error
+	WithContext(ctx context.Context, fields ...interface{}) context.Context
 	Fields() Fields
-	Flush()
+	Sink() logr.LogSink
 	Printf(format string, v ...interface{})
 	Print(v ...interface{})
 	Println(v ...interface{})
@@ -100,9 +111,6 @@ type Interface interface {
 	Info(v ...interface{})
 	Infof(format string, v ...interface{})
 	Infoln(v ...interface{})
-	Warn(v ...interface{})
-	Warnf(format string, v ...interface{})
-	Warnln(v ...interface{})
 	Warning(v ...interface{})
 	Warningf(format string, v ...interface{})
 	Warningln(v ...interface{})
@@ -115,6 +123,23 @@ type Interface interface {
 	Panic(v ...interface{})
 	Panicf(format string, v ...interface{})
 	Panicln(v ...interface{})
+}
+
+func fieldMap(kv ...interface{}) Fields {
+	fields := make(Fields, len(kv)/2)
+
+	for i, n := 0, len(kv); i < n; i += 2 {
+		k, ok := kv[i].(string)
+		if !ok {
+			k = fmt.Sprintf("!(%#v)", kv[i])
+		}
+		var v string
+		if i+1 < n {
+			v = fmt.Sprintf("%+v", kv[i+1])
+		}
+		fields[k] = v
+	}
+	return fields
 }
 
 // TimeRFC3339 RFC3339 time encoder
@@ -177,7 +202,7 @@ func ShortCaller() CallerEncoder {
 type Fields map[string]string
 
 // Get value from Fields
-func (f Fields) Get(k string) string {
+func (f Fields) Get(k string) interface{} {
 	v, ok := f[k]
 	if !ok {
 		return ""
@@ -186,42 +211,66 @@ func (f Fields) Get(k string) string {
 }
 
 // Set value to Fields
-func (f Fields) Set(k, v string) { f[k] = v }
-
-// config Parameter structure required for log initialization
-type config struct {
-	level         Level
-	bufferSize    int
-	encoder       Encoder
-	timeEncoder   TimeEncoder
-	callerEncoder CallerEncoder
-	flushInterval time.Duration
-}
+func (f Fields) Set(k string, v string) { f[k] = v }
 
 // Logger High-performance log structure
 // We are willing to accept any method that can increase the speed
 // If consuming memory can increase the speed, then just do it
 type Logger struct {
-	*config
-	locker      sync.Mutex
-	stopFlush   chan struct{}
-	bufioWriter *bufio.Writer
+	verbosity     int
+	v             int
+	level         Level
+	bufferSize    int
+	encoder       Encoder
+	timeEncoder   TimeEncoder
+	callerEncoder CallerEncoder
+	writer        *safeWriter
+}
+
+func (l *Logger) V(v int) Interface {
+	c := *l
+	c.v = v
+	return &c
+}
+
+func (l *Logger) WithMaxVerbosity(verbosity int) Interface {
+	c := *l
+	c.verbosity = verbosity
+	return &c
+}
+
+func (l *Logger) Verbosity() int {
+	return l.v
 }
 
 // FiledLogger logger but with field
 type FiledLogger struct {
-	l      *Logger
+	l      Interface
 	fields Fields // never need lock
 }
 
-// WithField creates an FiledLogger from the  logger and adds multiple
-// fields to it. This is simply a helper for `WithField`, invoking it
-// once for each field.
-//
-// Note that it doesn't log until you call Debug, Print, Info, Warn, Fatal
-// or Panic on the FiledLogger it returns.
-func (l *FiledLogger) WithField(key string, value ...string) Interface {
-	return l.WithFields(Fields{key: strings.Join(value, ",")})
+func (l *FiledLogger) Verbosity() int {
+	return l.l.Verbosity()
+}
+
+func (l *FiledLogger) WithMaxVerbosity(verbosity int) Interface {
+	return &FiledLogger{l: l.l.WithMaxVerbosity(verbosity), fields: l.fields}
+}
+
+func (l *FiledLogger) V(v int) Interface {
+	return &FiledLogger{l: l.l.V(v), fields: l.fields}
+}
+
+func (l *Logger) Sink() logr.LogSink {
+	return &sink{
+		logger: l,
+	}
+}
+
+func (l *FiledLogger) Sink() logr.LogSink {
+	return &sink{
+		logger: l,
+	}
 }
 
 // WithFields creates an FiledLogger from the  logger and adds multiple
@@ -230,18 +279,20 @@ func (l *FiledLogger) WithField(key string, value ...string) Interface {
 //
 // Note that it doesn't log until you call Debug, Print, Info, Warn, Fatal
 // or Panic on the FiledLogger it returns.
-func (l *FiledLogger) WithFields(fields Fields) Interface {
-	data := make(Fields, len(l.fields)+len(fields))
+func (l *FiledLogger) WithFields(fields ...interface{}) Interface {
+	data := make(Fields, len(l.fields)+len(fields)/2)
+
+	vars := fieldMap(fields...)
+
+	for k, v := range vars {
+		data[k] = v
+	}
+
 	for k, v := range l.fields {
 		data[k] = v
 	}
-	for k, v := range fields {
-		data[k] = v
-	}
-	return &FiledLogger{
-		l:      l.l,
-		fields: data,
-	}
+
+	return &FiledLogger{l: l.l, fields: data}
 }
 
 // WithError creates an FiledLogger from the logger and adds an error to it, using the value defined in error as key.
@@ -252,98 +303,40 @@ func (l *FiledLogger) WithError(err error) Interface {
 	return l.WithFields(Fields{"error": err.Error()})
 }
 
-// WithFloat64Field creates an FiledLogger from the logger and adds an float64 field to it.
-func (l *FiledLogger) WithFloat64Field(key string, value ...float64) Interface {
-	values := make([]string, 0, len(value))
-	for _, v := range value {
-		values = append(values, fmt.Sprintf("%f", v))
-	}
-	return l.WithFields(Fields{key: strings.Join(values, ",")})
+// WithOutput create new logger and set the output
+func (l *FiledLogger) WithOutput(out io.Writer) Interface {
+	return &FiledLogger{l: l.l.WithOutput(out), fields: l.fields}
 }
 
-// WithFloat32Field creates an FiledLogger from the logger and adds an float32 field to it.
-func (l *FiledLogger) WithFloat32Field(key string, value ...float32) Interface {
-	values := make([]string, 0, len(value))
-	for _, v := range value {
-		values = append(values, fmt.Sprintf("%f", v))
-	}
-	return l.WithFields(Fields{key: strings.Join(values, ",")})
-}
-
-// WithInt64Field creates an FiledLogger from the logger and adds an int64 field to it.
-func (l *FiledLogger) WithInt64Field(key string, value ...int64) Interface {
-	values := make([]string, 0, len(value))
-	for _, v := range value {
-		values = append(values, strconv.FormatInt(v, 10))
-	}
-	return l.WithFields(Fields{key: strings.Join(values, ",")})
-}
-
-// WithIntField creates an FiledLogger from the logger and adds an int field to it.
-func (l *FiledLogger) WithIntField(key string, value ...int) Interface {
-	values := make([]string, 0, len(value))
-	for _, v := range value {
-		values = append(values, strconv.Itoa(v))
-	}
-	return l.WithFields(Fields{key: strings.Join(values, ",")})
-}
-
-// WithBoolField creates an FiledLogger from the logger and adds an bool field to it.
-func (l *FiledLogger) WithBoolField(key string, value ...bool) Interface {
-	values := make([]string, 0, len(value))
-	for _, v := range value {
-		values = append(values, strconv.FormatBool(v))
-	}
-	return l.WithFields(Fields{key: strings.Join(values, ",")})
-}
-
-// WithDurationField creates an FiledLogger from the logger and adds an duration field to it.
-func (l *FiledLogger) WithDurationField(key string, value ...time.Duration) Interface {
-	values := make([]string, 0, len(value))
-	for _, v := range value {
-		values = append(values, v.String())
-	}
-	return l.WithFields(Fields{key: strings.Join(values, ",")})
-}
-
-// SetOutput Set the output of logger
-func (l *FiledLogger) SetOutput(out io.Writer) {
-	l.l.SetOutput(out)
-}
-
-// SetLevel Set the minimum log level that can be displayed.
+// WithLevel Set the minimum log level that can be displayed.
 // Logs below this level will not be displayed.
-func (l *FiledLogger) SetLevel(level Level) {
-	l.l.SetLevel(level)
+func (l *FiledLogger) WithLevel(level Level) Interface {
+	return &FiledLogger{l: l.l.WithLevel(level), fields: l.fields}
 }
 
-// SetEncoder set encoder for logging
-func (l *FiledLogger) SetEncoder(encoder Encoder) {
-	l.l.SetEncoder(encoder)
+// WithEncoder set encoder for logging
+func (l *FiledLogger) WithEncoder(encoder Encoder) Interface {
+	return &FiledLogger{l: l.l.WithEncoder(encoder), fields: l.fields}
 }
 
-// SetTimeEncoder set time encoder for logger
-func (l *FiledLogger) SetTimeEncoder(encoder TimeEncoder) {
-	l.l.SetTimeEncoder(encoder)
+// WithTimeEncoder set time encoder for logger
+func (l *FiledLogger) WithTimeEncoder(encoder TimeEncoder) Interface {
+	return &FiledLogger{l: l.l.WithTimeEncoder(encoder), fields: l.fields}
 }
 
-// SetCallerEncoder set caller encoder for logger
-func (l *FiledLogger) SetCallerEncoder(encoder CallerEncoder) {
-	l.l.SetCallerEncoder(encoder)
+// WithCallerEncoder set caller encoder for logger
+func (l *FiledLogger) WithCallerEncoder(encoder CallerEncoder) Interface {
+	return &FiledLogger{l: l.l.WithCallerEncoder(encoder), fields: l.fields}
 }
 
 // Output fake output is just call l.l.Output
-func (l *FiledLogger) Output(level Level, calldepth int, fileds Fields, s string) error {
-	return l.l.Output(level, calldepth+1, fileds, s)
+func (l *FiledLogger) Output(v int, level Level, callDepth int, fields Fields, s string) error {
+	return l.l.Output(v, level, callDepth+1, fields, s)
 }
 
 // WithContext Call l.WithFields (fields) to create a logger and inject it into the context
-func (l *FiledLogger) WithContext(ctx context.Context, opts ...func(Fields)) context.Context {
-	fields := make(Fields)
-	for _, opt := range opts {
-		opt(fields)
-	}
-	return context.WithValue(ctx, loggerKey, l.WithFields(fields))
+func (l *FiledLogger) WithContext(ctx context.Context, fields ...interface{}) context.Context {
+	return context.WithValue(ctx, loggerKey, l.WithFields(fieldMap(fields...)))
 }
 
 // Fields  get fields
@@ -355,184 +348,157 @@ func (l *FiledLogger) Fields() Fields {
 	return f
 }
 
-// Flush flush buffer
-func (l *FiledLogger) Flush() {
-	l.l.Flush()
-}
-
 // Printf calls l.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Printf(format string, v ...interface{}) {
-	_ = l.Output(InfoLevel, 2, l.fields, fmt.Sprintf(format, v...))
+	_ = l.Output(l.l.Verbosity(), InfoLevel, 2, l.fields, fmt.Sprintf(format, v...))
 }
 
 // Print calls l.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Print.
 func (l *FiledLogger) Print(v ...interface{}) {
-	_ = l.Output(InfoLevel, 2, l.fields, fmt.Sprint(v...))
+	_ = l.Output(l.l.Verbosity(), InfoLevel, 2, l.fields, fmt.Sprint(v...))
 }
 
 // Println calls l.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Println.
 func (l *FiledLogger) Println(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(InfoLevel, 2, l.fields, s[:len(s)-1])
+	_ = l.Output(l.l.Verbosity(), InfoLevel, 2, l.fields, s[:len(s)-1])
 }
 
 // Trace calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Trace(v ...interface{}) {
-	_ = l.Output(TraceLevel, 2, l.fields, fmt.Sprint(v...))
+	_ = l.Output(l.l.Verbosity(), TraceLevel, 2, l.fields, fmt.Sprint(v...))
 }
 
 // Tracef calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Tracef(format string, v ...interface{}) {
-	_ = l.Output(TraceLevel, 2, l.fields, fmt.Sprintf(format, v...))
+	_ = l.Output(l.l.Verbosity(), TraceLevel, 2, l.fields, fmt.Sprintf(format, v...))
 }
 
 // Traceln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Traceln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(TraceLevel, 2, l.fields, s[:len(s)-1])
+	_ = l.Output(l.l.Verbosity(), TraceLevel, 2, l.fields, s[:len(s)-1])
 }
 
 // Debug calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Debug(v ...interface{}) {
-	_ = l.Output(DebugLevel, 2, l.fields, fmt.Sprint(v...))
+	_ = l.Output(l.l.Verbosity(), DebugLevel, 2, l.fields, fmt.Sprint(v...))
 }
 
 // Debugf calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Debugf(format string, v ...interface{}) {
-	_ = l.Output(DebugLevel, 2, l.fields, fmt.Sprintf(format, v...))
+	_ = l.Output(l.l.Verbosity(), DebugLevel, 2, l.fields, fmt.Sprintf(format, v...))
 }
 
 // Debugln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Debugln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(DebugLevel, 2, l.fields, s[:len(s)-1])
+	_ = l.Output(l.l.Verbosity(), DebugLevel, 2, l.fields, s[:len(s)-1])
 }
 
 // Info calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Info(v ...interface{}) {
-	_ = l.Output(InfoLevel, 2, l.fields, fmt.Sprint(v...))
+	_ = l.Output(l.l.Verbosity(), InfoLevel, 2, l.fields, fmt.Sprint(v...))
 }
 
 // Infof calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Infof(format string, v ...interface{}) {
-	_ = l.Output(InfoLevel, 2, l.fields, fmt.Sprintf(format, v...))
+	_ = l.Output(l.l.Verbosity(), InfoLevel, 2, l.fields, fmt.Sprintf(format, v...))
 }
 
 // Infoln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Infoln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(InfoLevel, 2, l.fields, s[:len(s)-1])
-}
-
-// Warn calls Output to print to the standard logger.
-// Arguments are handled in the manner of fmt.Printf.
-func (l *FiledLogger) Warn(v ...interface{}) {
-	_ = l.Output(WarnLevel, 2, l.fields, fmt.Sprint(v...))
-}
-
-// Warnf calls Output to print to the standard logger.
-// Arguments are handled in the manner of fmt.Printf.
-func (l *FiledLogger) Warnf(format string, v ...interface{}) {
-	_ = l.Output(WarnLevel, 2, l.fields, fmt.Sprintf(format, v...))
-}
-
-// Warnln calls Output to print to the standard logger.
-// Arguments are handled in the manner of fmt.Printf.
-func (l *FiledLogger) Warnln(v ...interface{}) {
-	s := fmt.Sprintln(v...)
-	_ = l.Output(WarnLevel, 2, l.fields, s[:len(s)-1])
+	_ = l.Output(l.l.Verbosity(), InfoLevel, 2, l.fields, s[:len(s)-1])
 }
 
 // Warning calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Warning(v ...interface{}) {
-	_ = l.Output(WarnLevel, 2, l.fields, fmt.Sprint(v...))
+	_ = l.Output(l.l.Verbosity(), WarnLevel, 2, l.fields, fmt.Sprint(v...))
 }
 
 // Warningf calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Warningf(format string, v ...interface{}) {
-	_ = l.Output(WarnLevel, 2, l.fields, fmt.Sprintf(format, v...))
+	_ = l.Output(l.l.Verbosity(), WarnLevel, 2, l.fields, fmt.Sprintf(format, v...))
 }
 
 // Warningln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Warningln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(WarnLevel, 2, l.fields, s[:len(s)-1])
+	_ = l.Output(l.l.Verbosity(), WarnLevel, 2, l.fields, s[:len(s)-1])
 }
 
 // Error calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Error(v ...interface{}) {
-	_ = l.Output(ErrorLevel, 2, l.fields, fmt.Sprint(v...))
+	_ = l.Output(l.l.Verbosity(), ErrorLevel, 2, l.fields, fmt.Sprint(v...))
 }
 
 // Errorf calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Errorf(format string, v ...interface{}) {
-	_ = l.Output(ErrorLevel, 2, l.fields, fmt.Sprintf(format, v...))
+	_ = l.Output(l.l.Verbosity(), ErrorLevel, 2, l.fields, fmt.Sprintf(format, v...))
 }
 
 // Errorln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *FiledLogger) Errorln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(ErrorLevel, 2, l.fields, s[:len(s)-1])
+	_ = l.Output(l.l.Verbosity(), ErrorLevel, 2, l.fields, s[:len(s)-1])
 }
 
 // Panic is equivalent to l.Print() followed by a call to panic().
 func (l *FiledLogger) Panic(v ...interface{}) {
 	s := fmt.Sprint(v...)
-	_ = l.Output(PanicLevel, 2, l.fields, s)
+	_ = l.Output(l.l.Verbosity(), PanicLevel, 2, l.fields, s)
 	panic(s)
 }
 
 // Panicf is equivalent to l.Printf() followed by a call to panic().
 func (l *FiledLogger) Panicf(format string, v ...interface{}) {
 	s := fmt.Sprintf(format, v...)
-	_ = l.Output(PanicLevel, 2, l.fields, s)
+	_ = l.Output(l.l.Verbosity(), PanicLevel, 2, l.fields, s)
 	panic(s)
 }
 
 // Panicln is equivalent to l.Println() followed by a call to panic().
 func (l *FiledLogger) Panicln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(PanicLevel, 2, l.fields, s[:len(s)-1])
+	_ = l.Output(l.l.Verbosity(), PanicLevel, 2, l.fields, s[:len(s)-1])
 	panic(s)
 }
 
 // Fatal is equivalent to l.Print() followed by a call to os.Exit(1).
 func (l *FiledLogger) Fatal(v ...interface{}) {
-	_ = l.Output(FatalLevel, 2, l.fields, fmt.Sprint(v...))
-	l.Flush()
+	_ = l.Output(l.l.Verbosity(), FatalLevel, 2, l.fields, fmt.Sprint(v...))
 	os.Exit(1)
 }
 
 // Fatalf is equivalent to l.Printf() followed by a call to os.Exit(1).
 func (l *FiledLogger) Fatalf(format string, v ...interface{}) {
-	_ = l.Output(FatalLevel, 2, l.fields, fmt.Sprintf(format, v...))
-	l.Flush()
+	_ = l.Output(l.l.Verbosity(), FatalLevel, 2, l.fields, fmt.Sprintf(format, v...))
 	os.Exit(1)
 }
 
 // Fatalln is equivalent to l.Println() followed by a call to os.Exit(1).
 func (l *FiledLogger) Fatalln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(FatalLevel, 2, l.fields, s[:len(s)-1])
-	l.Flush()
+	_ = l.Output(l.l.Verbosity(), FatalLevel, 2, l.fields, s[:len(s)-1])
 	os.Exit(1)
 }
 
@@ -606,43 +572,43 @@ func ParseCaller(f string) (CallerEncoder, error) {
 
 // AddLevel wrap the level as an option
 func AddLevel(level Level) Option {
-	return func(l *config) {
+	return func(l *Logger) {
 		l.level = level
+	}
+}
+
+// AddMaxVerbosity wrap the verbosity as an option
+func AddMaxVerbosity(verbosity int) Option {
+	return func(l *Logger) {
+		l.verbosity = verbosity
 	}
 }
 
 // AddEncoder  wrap the encoder as an option
 func AddEncoder(enc Encoder) Option {
-	return func(l *config) {
+	return func(l *Logger) {
 		l.encoder = enc
 	}
 }
 
 // AddTimeEncoder wrap the time encoder as an option
 func AddTimeEncoder(enc TimeEncoder) Option {
-	return func(l *config) {
+	return func(l *Logger) {
 		l.timeEncoder = enc
 	}
 }
 
 // AddCallerEncoder wrap the caller encoder as an option
 func AddCallerEncoder(enc CallerEncoder) Option {
-	return func(l *config) {
+	return func(l *Logger) {
 		l.callerEncoder = enc
 	}
 }
 
 // AddBufferSize wrap the caller encoder as an option
 func AddBufferSize(size int) Option {
-	return func(l *config) {
+	return func(l *Logger) {
 		l.bufferSize = size
-	}
-}
-
-// AddFlushInterval wrap the caller encoder as an option
-func AddFlushInterval(interval time.Duration) Option {
-	return func(l *config) {
-		l.flushInterval = interval
 	}
 }
 
@@ -799,174 +765,127 @@ func DurationField(key string, value ...time.Duration) func(f Fields) {
 
 // WithoutContext just return std logger
 func WithoutContext() Interface {
-	return std
+	return std.Load().(Interface)
 }
 
 // WithContext Inject logger into the context
-func WithContext(ctx context.Context, opts ...func(Fields)) context.Context {
-	return std.WithContext(ctx, opts...)
+func WithContext(ctx context.Context, fields ...interface{}) context.Context {
+	std := std.Load().(Interface)
+	return std.WithContext(ctx, fields...)
 }
 
-// FromContext get logger forom context
+// FromContext get logger from context
 func FromContext(ctx context.Context) Interface {
 	if ctx == nil {
 		panic("nil context")
 	}
 	logger, ok := ctx.Value(loggerKey).(Interface)
 	if !ok {
-		logger = std
+		logger = std.Load().(Interface)
 	}
 	return logger
 }
 
 // New create Interface and set output is w
-func New(w io.Writer, opts ...Option) *Logger {
-	c := &config{
-		level:         InfoLevel,
-		bufferSize:    defaultBufSize,
-		encoder:       DefaultTextEncoder,
-		flushInterval: defaultFlushInterval,
+func New(w io.Writer, opts ...Option) Interface {
+	l := &Logger{
+		level:   InfoLevel,
+		encoder: DefaultTextEncoder,
+		writer:  &safeWriter{out: w},
 	}
+
 	// apply option
 	for _, opt := range opts {
-		opt(c)
+		opt(l)
 	}
-
-	l := &Logger{
-		config:      c,
-		stopFlush:   make(chan struct{}),
-		bufioWriter: bufio.NewWriterSize(w, c.bufferSize),
-	}
-
-	// Close the ticker after gc and exit the coroutine
-	runtime.SetFinalizer(l, func(l *Logger) { close(l.stopFlush) })
-
-	go l.launchFlushDaemon()
 
 	return l
 }
 
-func (l *Logger) launchFlushDaemon() {
-	ticker := time.NewTicker(l.config.flushInterval)
-	for {
-		select {
-		case <-ticker.C:
-			l.Flush()
-		case <-l.stopFlush:
-			l.Flush()
-			ticker.Stop()
-			return
-		}
-	}
-}
-
 // WithContext Inject logger into context
-func (l *Logger) WithContext(ctx context.Context, opts ...func(Fields)) context.Context {
-	fields := make(Fields)
-	for _, opt := range opts {
-		opt(fields)
-	}
-	return context.WithValue(ctx, loggerKey, l.WithFields(fields))
+func (l *Logger) WithContext(ctx context.Context, fields ...interface{}) context.Context {
+	return context.WithValue(ctx, loggerKey, l.WithFields(fields...))
 }
 
-// SetLevel Set the minimum log level that can be displayed.
+// WithLevel Set the minimum log level that can be displayed.
 // Logs below this level will not be displayed.
-func (l *Logger) SetLevel(level Level) {
-	l.locker.Lock()
-	defer l.locker.Unlock()
-	l.config.level = level
+func (l *Logger) WithLevel(level Level) Interface {
+	c := *l
+	c.level = level
+	return &c
 }
 
-// SetEncoder set encoder for logging
-func (l *Logger) SetEncoder(encoder Encoder) {
-	l.locker.Lock()
-	defer l.locker.Unlock()
-	l.config.encoder = encoder
+// WithEncoder set encoder for logging
+func (l *Logger) WithEncoder(encoder Encoder) Interface {
+	c := *l
+	c.encoder = encoder
+	return &c
 }
 
-// SetTimeEncoder set time encoder for loger
-func (l *Logger) SetTimeEncoder(encoder TimeEncoder) {
-	l.locker.Lock()
-	defer l.locker.Unlock()
-	l.config.timeEncoder = encoder
+// WithTimeEncoder set time encoder for loger
+func (l *Logger) WithTimeEncoder(encoder TimeEncoder) Interface {
+	c := *l
+	c.timeEncoder = encoder
+	return &c
 }
 
-// SetCallerEncoder set caller encoder for logger
-func (l *Logger) SetCallerEncoder(encoder CallerEncoder) {
-	l.locker.Lock()
-	defer l.locker.Unlock()
-	l.config.callerEncoder = encoder
+// WithCallerEncoder set caller encoder for logger
+func (l *Logger) WithCallerEncoder(encoder CallerEncoder) Interface {
+	c := *l
+	c.callerEncoder = encoder
+	return &c
 }
 
 // Output call the format function and write the formatted data to io.Writer
-func (l *Logger) Output(level Level, calldepth int, fileds Fields, s string) error {
+func (l *Logger) Output(v int, level Level, callDepth int, fields Fields, s string) error {
 	var (
 		caller   string
 		dateTime string
 	)
-	l.locker.Lock()
-	if l.level > level { // skip output by level limit
-		l.locker.Unlock()
+
+	// skip output by level/verbosity limit
+	if l.level > level || l.verbosity < v {
 		return nil
 	}
-	callerEncoder := l.config.callerEncoder // Just copy the value of the pointer
-	timeEncoder := l.config.timeEncoder     // Just copy the value of the pointer
-	l.locker.Unlock()
-	if timeEncoder != nil {
+
+	if l.timeEncoder != nil {
 		t := time.Now() // Sacrificing time accuracy, but gaining performance
-		dateTime = timeEncoder(&t)
+		dateTime = l.timeEncoder(&t)
 	}
-	if callerEncoder != nil {
-		_, file, line, ok := runtime.Caller(calldepth) // Expensive time consumption
+
+	if l.callerEncoder != nil {
+		_, file, line, ok := runtime.Caller(callDepth) // Expensive time consumption
 		if !ok {
 			file = "???"
 			line = 0
 		}
-		caller = callerEncoder(file, line)
+		caller = l.callerEncoder(file, line)
 	}
+
 	buf := bufPool.Get()
 	defer bufPool.Put(buf)
-	if err := l.config.encoder.Encode(buf, &Message{
+
+	if err := l.encoder.Encode(buf, &Message{
 		Level:   level,
 		Time:    dateTime,
 		Caller:  caller,
-		Fields:  fileds,
+		Fields:  fields,
 		Message: s,
 	}); err != nil {
 		return err
 	}
-	l.locker.Lock()
-	defer l.locker.Unlock()
-	_, err := l.bufioWriter.Write(*buf)
+	_, err := l.writer.Write(*buf)
 	return err
 }
 
 // Fields  get fields
 func (l *Logger) Fields() Fields { return nil }
 
-// Flush flush the buffer to the file
-func (l *Logger) Flush() {
-	l.locker.Lock()
-	defer l.locker.Unlock()
-	if err := l.bufioWriter.Flush(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "Error flushing data to writer %s", err)
-	}
-}
-
-// SetOutput set the Logger writer to out io.Writer
-func (l *Logger) SetOutput(out io.Writer) {
-	l.locker.Lock()
-	defer l.locker.Unlock()
-	if err := l.bufioWriter.Flush(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "Error flushing data to writer %s", err)
-	}
-	l.bufioWriter = bufio.NewWriterSize(out, l.bufferSize)
-}
-
-// WithField key is string value is string,
-// this key value will be printed out every time when log is printed
-func (l *Logger) WithField(key string, value ...string) Interface {
-	return l.WithFields(Fields{key: strings.Join(value, ",")})
+// WithOutput set the Logger writer to out io.Writer
+func (l *Logger) WithOutput(out io.Writer) Interface {
+	c := *l
+	c.writer = &safeWriter{out: out}
+	return &c
 }
 
 // WithError key is string value is Error,
@@ -975,490 +894,459 @@ func (l *Logger) WithError(err error) Interface {
 	return l.WithFields(Fields{"error": err.Error()})
 }
 
-// WithFloat64Field key is string value is float64,
-// this key value will be printed out every time when log is printed
-func (l *Logger) WithFloat64Field(key string, value ...float64) Interface {
-	values := make([]string, 0, len(value))
-	for _, v := range value {
-		values = append(values, fmt.Sprintf("%f", v))
-	}
-	return l.WithFields(Fields{key: strings.Join(values, ",")})
-}
-
-// WithFloat32Field key is string value is float32,
-// this key value will be printed out every time when log is printed
-func (l *Logger) WithFloat32Field(key string, value ...float32) Interface {
-	values := make([]string, 0, len(value))
-	for _, v := range value {
-		values = append(values, fmt.Sprintf("%f", v))
-	}
-	return l.WithFields(Fields{key: strings.Join(values, ",")})
-}
-
-// WithInt64Field key is string value is int64,
-// this key value will be printed out every time when log is printed
-func (l *Logger) WithInt64Field(key string, value ...int64) Interface {
-	values := make([]string, 0, len(value))
-	for _, v := range value {
-		values = append(values, strconv.FormatInt(v, 10))
-	}
-	return l.WithFields(Fields{key: strings.Join(values, ",")})
-}
-
-// WithIntField key is string value is int,
-// this key value will be printed out every time when log is printed
-func (l *Logger) WithIntField(key string, value ...int) Interface {
-	values := make([]string, 0, len(value))
-	for _, v := range value {
-		values = append(values, strconv.Itoa(v))
-	}
-	return l.WithFields(Fields{key: strings.Join(values, ",")})
-}
-
-// WithDurationField key is string value is time.Duration,
-// this key value will be printed out every time when log is printed
-func (l *Logger) WithDurationField(key string, value ...time.Duration) Interface {
-	values := make([]string, 0, len(value))
-	for _, v := range value {
-		values = append(values, v.String())
-	}
-	return l.WithFields(Fields{key: strings.Join(values, ",")})
-}
-
-// WithBoolField key is string value is bool,
-// this key value will be printed out every time when log is printed
-func (l *Logger) WithBoolField(key string, value ...bool) Interface {
-	values := make([]string, 0, len(value))
-	for _, v := range value {
-		values = append(values, strconv.FormatBool(v))
-	}
-	return l.WithFields(Fields{key: strings.Join(values, ",")})
-}
-
 // WithFields Parameter is map[string] string type
 // this key value will be printed out every time when log is printed
-func (l *Logger) WithFields(fields Fields) Interface {
-	data := make(Fields, len(fields))
-	for k, v := range fields {
-		data[k] = v
-	}
+func (l *Logger) WithFields(fields ...interface{}) Interface {
 	return &FiledLogger{
 		l:      l,
-		fields: data,
+		fields: fieldMap(fields...),
 	}
 }
 
 // Printf calls l.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Printf(format string, v ...interface{}) {
-	_ = l.Output(InfoLevel, 2, nil, fmt.Sprintf(format, v...))
+	_ = l.Output(l.v, InfoLevel, 2, nil, fmt.Sprintf(format, v...))
 }
 
 // Print calls l.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Print.
 func (l *Logger) Print(v ...interface{}) {
-	_ = l.Output(InfoLevel, 2, nil, fmt.Sprint(v...))
+	_ = l.Output(l.v, InfoLevel, 2, nil, fmt.Sprint(v...))
 }
 
 // Println calls l.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Println.
 func (l *Logger) Println(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(InfoLevel, 2, nil, s[:len(s)-1])
+	_ = l.Output(l.v, InfoLevel, 2, nil, s[:len(s)-1])
 }
 
 // Trace calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Trace(v ...interface{}) {
-	_ = l.Output(TraceLevel, 2, nil, fmt.Sprint(v...))
+	_ = l.Output(l.v, TraceLevel, 2, nil, fmt.Sprint(v...))
 }
 
 // Tracef calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Tracef(format string, v ...interface{}) {
-	_ = l.Output(TraceLevel, 2, nil, fmt.Sprintf(format, v...))
+	_ = l.Output(l.v, TraceLevel, 2, nil, fmt.Sprintf(format, v...))
 }
 
 // Traceln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Traceln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(TraceLevel, 2, nil, s[:len(s)-1])
+	_ = l.Output(l.v, TraceLevel, 2, nil, s[:len(s)-1])
 }
 
 // Debug calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Debug(v ...interface{}) {
-	_ = l.Output(DebugLevel, 2, nil, fmt.Sprint(v...))
+	_ = l.Output(l.v, DebugLevel, 2, nil, fmt.Sprint(v...))
 }
 
 // Debugf calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Debugf(format string, v ...interface{}) {
-	_ = l.Output(DebugLevel, 2, nil, fmt.Sprintf(format, v...))
+	_ = l.Output(l.v, DebugLevel, 2, nil, fmt.Sprintf(format, v...))
 }
 
 // Debugln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Debugln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(DebugLevel, 2, nil, s[:len(s)-1])
+	_ = l.Output(l.v, DebugLevel, 2, nil, s[:len(s)-1])
 }
 
 // Info calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Info(v ...interface{}) {
-	_ = l.Output(InfoLevel, 2, nil, fmt.Sprint(v...))
+	_ = l.Output(l.v, InfoLevel, 2, nil, fmt.Sprint(v...))
 }
 
 // Infof calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Infof(format string, v ...interface{}) {
-	_ = l.Output(InfoLevel, 2, nil, fmt.Sprintf(format, v...))
+	_ = l.Output(l.v, InfoLevel, 2, nil, fmt.Sprintf(format, v...))
 }
 
 // Infoln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Infoln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(InfoLevel, 2, nil, s[:len(s)-1])
-}
-
-// Warn calls Output to print to the standard logger.
-// Arguments are handled in the manner of fmt.Printf.
-func (l *Logger) Warn(v ...interface{}) {
-	_ = l.Output(WarnLevel, 2, nil, fmt.Sprint(v...))
-}
-
-// Warnf calls Output to print to the standard logger.
-// Arguments are handled in the manner of fmt.Printf.
-func (l *Logger) Warnf(format string, v ...interface{}) {
-	_ = l.Output(WarnLevel, 2, nil, fmt.Sprintf(format, v...))
-}
-
-// Warnln calls Output to print to the standard logger.
-// Arguments are handled in the manner of fmt.Printf.
-func (l *Logger) Warnln(v ...interface{}) {
-	s := fmt.Sprintln(v...)
-	_ = l.Output(WarnLevel, 2, nil, s[:len(s)-1])
+	_ = l.Output(l.v, InfoLevel, 2, nil, s[:len(s)-1])
 }
 
 // Warning calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Warning(v ...interface{}) {
-	_ = l.Output(WarnLevel, 2, nil, fmt.Sprint(v...))
+	_ = l.Output(l.v, WarnLevel, 2, nil, fmt.Sprint(v...))
 }
 
 // Warningf calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Warningf(format string, v ...interface{}) {
-	_ = l.Output(WarnLevel, 2, nil, fmt.Sprintf(format, v...))
+	_ = l.Output(l.v, WarnLevel, 2, nil, fmt.Sprintf(format, v...))
 }
 
 // Warningln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Warningln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(WarnLevel, 2, nil, s[:len(s)-1])
+	_ = l.Output(l.v, WarnLevel, 2, nil, s[:len(s)-1])
 }
 
 // Error calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Error(v ...interface{}) {
-	_ = l.Output(ErrorLevel, 2, nil, fmt.Sprint(v...))
+	_ = l.Output(l.v, ErrorLevel, 2, nil, fmt.Sprint(v...))
 }
 
 // Errorf calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Errorf(format string, v ...interface{}) {
-	_ = l.Output(ErrorLevel, 2, nil, fmt.Sprintf(format, v...))
+	_ = l.Output(l.v, ErrorLevel, 2, nil, fmt.Sprintf(format, v...))
 }
 
 // Errorln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Errorln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(ErrorLevel, 2, nil, s[:len(s)-1])
+	_ = l.Output(l.v, ErrorLevel, 2, nil, s[:len(s)-1])
 }
 
 // Panic is equivalent to l.Print() followed by a call to panic().
 func (l *Logger) Panic(v ...interface{}) {
 	s := fmt.Sprint(v...)
-	_ = l.Output(PanicLevel, 2, nil, s)
+	_ = l.Output(l.v, PanicLevel, 2, nil, s)
 	panic(s)
 }
 
 // Panicf is equivalent to l.Printf() followed by a call to panic().
 func (l *Logger) Panicf(format string, v ...interface{}) {
 	s := fmt.Sprintf(format, v...)
-	_ = l.Output(PanicLevel, 2, nil, s)
+	_ = l.Output(l.v, PanicLevel, 2, nil, s)
 	panic(s)
 }
 
 // Panicln is equivalent to l.Println() followed by a call to panic().
 func (l *Logger) Panicln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(PanicLevel, 2, nil, s[:len(s)-1])
+	_ = l.Output(l.v, PanicLevel, 2, nil, s[:len(s)-1])
 	panic(s)
 }
 
 // Fatal is equivalent to l.Print() followed by a call to os.Exit(1).
 func (l *Logger) Fatal(v ...interface{}) {
-	_ = l.Output(FatalLevel, 2, nil, fmt.Sprint(v...))
-	l.Flush()
+	_ = l.Output(l.v, FatalLevel, 2, nil, fmt.Sprint(v...))
 	os.Exit(1)
 }
 
 // Fatalf is equivalent to l.Printf() followed by a call to os.Exit(1).
 func (l *Logger) Fatalf(format string, v ...interface{}) {
-	_ = l.Output(FatalLevel, 2, nil, fmt.Sprintf(format, v...))
-	l.Flush()
+	_ = l.Output(l.v, FatalLevel, 2, nil, fmt.Sprintf(format, v...))
 	os.Exit(1)
 }
 
 // Fatalln is equivalent to l.Println() followed by a call to os.Exit(1).
 func (l *Logger) Fatalln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = l.Output(FatalLevel, 2, nil, s[:len(s)-1])
-	l.Flush()
+	_ = l.Output(l.v, FatalLevel, 2, nil, s[:len(s)-1])
 	os.Exit(1)
 }
 
-// SetOutput set output to out
-func SetOutput(out io.Writer) {
-	std.SetOutput(out)
+type sink struct {
+	callDepth int
+	logger    Interface
 }
 
-// SetEncoder set Encoder to e for std logger
-func SetEncoder(e Encoder) {
-	std.SetEncoder(e)
+func (l *sink) Init(info logr.RuntimeInfo) {
+	l.callDepth += info.CallDepth
 }
 
-// SetTimeEncoder set time encoder for std logger
-func SetTimeEncoder(e TimeEncoder) {
-	std.SetTimeEncoder(e)
+func (l *sink) Enabled(level int) bool {
+	return l.logger.Verbosity() >= level
 }
 
-// SetCallerEncoder set caller encoder for std logger
-func SetCallerEncoder(e CallerEncoder) {
-	std.SetCallerEncoder(e)
+func (l *sink) Info(level int, msg string, keysAndValues ...interface{}) {
+	_ = l.logger.Output(level, InfoLevel, l.callDepth, l.logger.WithFields(fieldMap(keysAndValues...)).Fields(), msg)
 }
 
-// WithFloat64Field key is string value is float64,
-// this key value will be printed out every time when log is printed
-func WithFloat64Field(key string, value float64) Interface {
-	return std.WithFloat64Field(key, value)
+func (l *sink) Error(err error, msg string, keysAndValues ...interface{}) {
+	_ = l.logger.Output(l.logger.Verbosity(), ErrorLevel, l.callDepth, l.logger.WithError(err).WithFields(fieldMap(keysAndValues...)).Fields(), msg)
 }
 
-// WithFloat32Field key is string value is float32,
-// this key value will be printed out every time when log is printed
-func WithFloat32Field(key string, value float32) Interface {
-	return std.WithFloat32Field(key, value)
+func (l *sink) WithValues(keysAndValues ...interface{}) logr.LogSink {
+	fmt.Printf("%+v----\n", keysAndValues)
+	fields := make([]interface{}, 0, len(keysAndValues)*2)
+
+	for i := 0; i < len(keysAndValues); i++ {
+		vars := keysAndValues[i].([]interface{})
+		fields = append(fields, vars...)
+	}
+
+	return &sink{
+		callDepth: l.callDepth,
+		logger:    l.logger.WithFields(fields),
+	}
 }
 
-// WithInt64Field key is string value is int64,
-// this key value will be printed out every time when log is printed
-func WithInt64Field(key string, value int64) Interface {
-	return std.WithInt64Field(key, value)
+func (l *sink) WithName(name string) logr.LogSink {
+	return &sink{
+		callDepth: l.callDepth,
+		logger:    l.logger.WithFields("name", name),
+	}
 }
 
-// WithIntField key is string value is int,
-// this key value will be printed out every time when log is printed
-func WithIntField(key string, value int) Interface {
-	return std.WithIntField(key, value)
+// WithOutput set output to out
+func WithOutput(out io.Writer) Interface {
+	std := std.Load().(Interface)
+	return std.WithOutput(out)
 }
 
-// WithDurationField key is string value is int,
-// this key value will be printed out every time when log is printed
-func WithDurationField(key string, value time.Duration) Interface {
-	return std.WithDurationField(key, value)
+// WithEncoder set Encoder to e for std logger
+func WithEncoder(e Encoder) Interface {
+	std := std.Load().(Interface)
+	return std.WithEncoder(e)
 }
 
-// WithBoolField key is string value is bool,
-// this key value will be printed out every time when log is printed
-func WithBoolField(key string, value bool) Interface {
-	return std.WithBoolField(key, value)
+// WithTimeEncoder set time encoder for std logger
+func WithTimeEncoder(e TimeEncoder) Interface {
+	std := std.Load().(Interface)
+	return std.WithTimeEncoder(e)
 }
 
-// WithField key is string value is string,
-// this key value will be printed out every time when log is printed
-func WithField(key string, value ...string) Interface {
-	return std.WithField(key, value...)
+// WithCallerEncoder set caller encoder for std logger
+func WithCallerEncoder(e CallerEncoder) Interface {
+	std := std.Load().(Interface)
+	return std.WithCallerEncoder(e)
 }
 
 // WithFields Parameter is map[string] string type
 // this key value will be printed out every time when log is printed
-func WithFields(fields Fields) Interface {
+func WithFields(fields ...interface{}) Interface {
+	std := std.Load().(Interface)
 	return std.WithFields(fields)
 }
 
 // WithError key is string value is Error,
 // this key value will be printed out every time when log is printed
 func WithError(err error) Interface {
+	std := std.Load().(Interface)
 	return std.WithError(err)
 }
 
-// SetLevel Set the log level, logs below this level will not be printed
-func SetLevel(level Level) {
-	std.SetLevel(level)
+// WithLevel Set the log level, logs below this level will not be printed
+func WithLevel(level Level) Interface {
+	std := std.Load().(Interface)
+	return std.WithLevel(level)
 }
-
-// Flush flush the buffer data to the file
-func Flush() { std.Flush() }
 
 // Printf calls std.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Printf(format string, v ...interface{}) {
-	_ = std.Output(InfoLevel, 2, nil, fmt.Sprintf(format, v...))
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), InfoLevel, 2, nil, fmt.Sprintf(format, v...))
 }
 
 // Print calls std.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Print.
 func Print(v ...interface{}) {
-	_ = std.Output(InfoLevel, 2, nil, fmt.Sprint(v...))
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), InfoLevel, 2, nil, fmt.Sprint(v...))
 }
 
 // Println calls std.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Println.
 func Println(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = std.Output(InfoLevel, 2, nil, s[:len(s)-1])
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), InfoLevel, 2, nil, s[:len(s)-1])
 }
 
 // Trace calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Trace(v ...interface{}) {
-	_ = std.Output(TraceLevel, 2, nil, fmt.Sprint(v...))
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), TraceLevel, 2, nil, fmt.Sprint(v...))
 }
 
 // Tracef calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Tracef(format string, v ...interface{}) {
-	_ = std.Output(TraceLevel, 2, nil, fmt.Sprintf(format, v...))
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), TraceLevel, 2, nil, fmt.Sprintf(format, v...))
 }
 
 // Traceln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Traceln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = std.Output(TraceLevel, 2, nil, s[:len(s)-1])
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), TraceLevel, 2, nil, s[:len(s)-1])
 }
 
 // Debug calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Debug(v ...interface{}) {
-	_ = std.Output(DebugLevel, 2, nil, fmt.Sprint(v...))
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), DebugLevel, 2, nil, fmt.Sprint(v...))
 }
 
 // Debugf calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Debugf(format string, v ...interface{}) {
-	_ = std.Output(DebugLevel, 2, nil, fmt.Sprintf(format, v...))
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), DebugLevel, 2, nil, fmt.Sprintf(format, v...))
 }
 
 // Debugln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Debugln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = std.Output(DebugLevel, 2, nil, s[:len(s)-1])
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), DebugLevel, 2, nil, s[:len(s)-1])
 }
 
 // Info calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Info(v ...interface{}) {
-	_ = std.Output(InfoLevel, 2, nil, fmt.Sprint(v...))
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), InfoLevel, 2, nil, fmt.Sprint(v...))
 }
 
 // Infof calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Infof(format string, v ...interface{}) {
-	_ = std.Output(InfoLevel, 2, nil, fmt.Sprintf(format, v...))
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), InfoLevel, 2, nil, fmt.Sprintf(format, v...))
 }
 
 // Infoln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Infoln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = std.Output(InfoLevel, 2, nil, s[:len(s)-1])
-}
-
-// Warn calls Output to print to the standard logger.
-// Arguments are handled in the manner of fmt.Printf.
-func Warn(v ...interface{}) {
-	_ = std.Output(WarnLevel, 2, nil, fmt.Sprint(v...))
-}
-
-// Warnf calls Output to print to the standard logger.
-// Arguments are handled in the manner of fmt.Printf.
-func Warnf(format string, v ...interface{}) {
-	_ = std.Output(WarnLevel, 2, nil, fmt.Sprintf(format, v...))
-}
-
-// Warnln calls Output to print to the standard logger.
-// Arguments are handled in the manner of fmt.Printf.
-func Warnln(v ...interface{}) {
-	s := fmt.Sprintln(v...)
-	_ = std.Output(WarnLevel, 2, nil, s[:len(s)-1])
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), InfoLevel, 2, nil, s[:len(s)-1])
 }
 
 // Error calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Error(v ...interface{}) {
-	_ = std.Output(ErrorLevel, 2, nil, fmt.Sprint(v...))
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), ErrorLevel, 2, nil, fmt.Sprint(v...))
 }
 
 // Errorf calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Errorf(format string, v ...interface{}) {
-	_ = std.Output(ErrorLevel, 2, nil, fmt.Sprintf(format, v...))
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), ErrorLevel, 2, nil, fmt.Sprintf(format, v...))
 }
 
 // Errorln calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Errorln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = std.Output(ErrorLevel, 2, nil, s[:len(s)-1])
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), ErrorLevel, 2, nil, s[:len(s)-1])
 }
 
 // Panic is equivalent to l.Print() followed by a call to panic().
 func Panic(v ...interface{}) {
 	s := fmt.Sprint(v...)
-	_ = std.Output(PanicLevel, 2, nil, s)
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), PanicLevel, 2, nil, s)
 	panic(s)
 }
 
 // Panicf is equivalent to l.Printf() followed by a call to panic().
 func Panicf(format string, v ...interface{}) {
 	s := fmt.Sprintf(format, v...)
-	_ = std.Output(PanicLevel, 2, nil, s)
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), PanicLevel, 2, nil, s)
 	panic(s)
 }
 
 // Panicln is equivalent to l.Println() followed by a call to panic().
 func Panicln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = std.Output(PanicLevel, 2, nil, s[:len(s)-1])
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), PanicLevel, 2, nil, s[:len(s)-1])
 	panic(s)
 }
 
 // Fatal is equivalent to l.Print() followed by a call to os.Exit(1).
 func Fatal(v ...interface{}) {
-	_ = std.Output(FatalLevel, 2, nil, fmt.Sprint(v...))
-	std.Flush()
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), FatalLevel, 2, nil, fmt.Sprint(v...))
 	os.Exit(1)
 }
 
 // Fatalf is equivalent to l.Printf() followed by a call to os.Exit(1).
 func Fatalf(format string, v ...interface{}) {
-	_ = std.Output(FatalLevel, 2, nil, fmt.Sprintf(format, v...))
-	std.Flush()
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), FatalLevel, 2, nil, fmt.Sprintf(format, v...))
 	os.Exit(1)
 }
 
 // Fatalln is equivalent to l.Println() followed by a call to os.Exit(1).
 func Fatalln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	_ = std.Output(FatalLevel, 2, nil, s[:len(s)-1])
-	std.Flush()
+	std := std.Load().(Interface)
+	_ = std.Output(std.Verbosity(), FatalLevel, 2, nil, s[:len(s)-1])
 	os.Exit(1)
+}
+
+// Sink is equivalent to l.Sink()
+func Sink() logr.LogSink {
+	std := std.Load().(Interface)
+	return std.Sink()
+}
+
+// SetLogger .
+func SetLogger(l Interface) {
+	std.Store(l)
+}
+
+// NewFromOptions create logger from options
+func NewFromOptions(opts *Options) (Interface, error) {
+	logger := New(os.Stderr)
+
+	lvl, err := ParseLevel(opts.Level)
+	if err != nil {
+		return nil, err
+	}
+
+	logger = logger.WithLevel(lvl)
+
+	encoder, err := ParseEncoder(opts.Format)
+	if err != nil {
+		return nil, err
+	}
+	logger = logger.WithEncoder(encoder)
+
+	cal, err := ParseCaller(opts.Caller)
+	if err != nil {
+		return nil, err
+	}
+	logger = logger.WithCallerEncoder(cal)
+
+	timeEncoder, err := ParseTimeEncoder(opts.Time)
+	if err != nil {
+		return nil, err
+	}
+	logger = logger.WithTimeEncoder(timeEncoder)
+
+	if opts.File != "" {
+		file, err := os.OpenFile(opts.File, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		if err != nil {
+			return nil, err
+		}
+		logger = logger.WithOutput(file)
+	}
+
+	return logger.WithMaxVerbosity(opts.MaxVerbosity), nil
 }

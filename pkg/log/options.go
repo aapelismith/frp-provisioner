@@ -29,6 +29,8 @@ type Options struct {
 	Caller string `yaml:"caller,omitempty" json:"caller,omitempty"`
 	// log encoder, optional: text, json
 	Format string `yaml:"format,omitempty" json:"format,omitempty"`
+	// MaxVerbosity Specifies the maximum Verbosity value that the current logger can display
+	MaxVerbosity int `yaml:"maxVerbosity,omitempty" json:"maxVerbosity,omitempty"`
 }
 
 // SetDefaults sets the default values.
@@ -47,6 +49,7 @@ func (l *Options) Flags() *pflag.FlagSet {
 	fs.StringVar(&l.Time, "log.time", l.Time, "The encoder of the time field in the log, eg: RFC3339, RFC3339NANO, RFC822, RFC850, RFC1123, STAMP")
 	fs.StringVar(&l.Caller, "log.caller", l.Caller, "The log call encoder specifies how the log line number is displayed in the source file, eg: long, short")
 	fs.StringVar(&l.Format, "log.format", l.Format, "Log format encoder, specify the display format of the log, eg: text, json")
+	fs.IntVar(&l.MaxVerbosity, "log.v", l.MaxVerbosity, "Specifies the maximum Verbosity value that the current logger can display")
 	return fs
 }
 

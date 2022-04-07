@@ -8,22 +8,13 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"kunstack.com/pharos/pkg/safe"
-	"kunstack.com/pharos/pkg/types"
 	"os"
 	"path/filepath"
 )
 
-var _ types.Configurator = (*Options)(nil)
-
 type Options struct {
 	safe.NoCopy
 	KubeConfig string `yaml:"kube_config,omitempty"`
-}
-
-func (o *Options) SetDefaults() {
-	if home, _ := os.UserHomeDir(); home != "" {
-		o.KubeConfig = filepath.Join(home, ".kube", "config")
-	}
 }
 
 func (o *Options) Validate() error {
@@ -49,17 +40,30 @@ func (o *Options) Flags() *pflag.FlagSet {
 
 // NewOptions for creating a new clientSet
 func NewOptions() *Options {
-	return new(Options)
+	var kubeConfig string
+	if home, _ := os.UserHomeDir(); home != "" {
+		kubeConfig = filepath.Join(home, ".kube", "config")
+	}
+	return &Options{KubeConfig: kubeConfig}
 }
 
-func NewClient(opt *Options) (kubernetes.Interface, error) {
+func NewClient(opt *Options) (*kubernetes.Clientset, error) {
+	// 使用 ServiceAccount 创建集群配置（InCluster模式）
+	config, err := NewConfig(opt)
+	if err != nil {
+		return nil, err
+	}
+	return kubernetes.NewForConfig(config)
+}
+
+func NewConfig(opt *Options) (*rest.Config, error) {
 	// 使用 ServiceAccount 创建集群配置（InCluster模式）
 	config, err := rest.InClusterConfig()
-	if err != nil {
+	if err == nil {
 		// 使用 KubeConfig 文件创建集群配置
 		if config, err = clientcmd.BuildConfigFromFlags("", opt.KubeConfig); err != nil {
 			return nil, err
 		}
 	}
-	return kubernetes.NewForConfig(config)
+	return config, nil
 }

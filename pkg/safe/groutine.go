@@ -16,18 +16,15 @@ package safe
 import (
 	"context"
 	"errors"
-	"runtime/debug"
 	"sync"
-
-	"kunstack.com/pharos/pkg/log"
 )
 
 type routine struct {
-	groutine  func(stopChain <-chan struct{})
+	goroutine func(stopChain <-chan struct{})
 	stopChain chan struct{}
 }
 
-// ServiceManager struct for manage groutine
+// ServiceManager struct for manage goroutine
 // This structure is designed to manage the long-running services of the system
 type ServiceManager struct {
 	routines   []routine
@@ -74,7 +71,7 @@ func (p *ServiceManager) Start() error {
 		routine.stopChain = make(chan struct{})
 		Go(func() {
 			defer p.waitGroup.Done()
-			routine.groutine(routine.stopChain)
+			routine.goroutine(routine.stopChain)
 		})
 	}
 	for _, routine := range p.routineCtx {
@@ -108,25 +105,25 @@ func (p *ServiceManager) Close() {
 	p.baseCancel()
 }
 
-// Go create groutine with stopChan
-func (p *ServiceManager) Go(groutine func(stopChain <-chan struct{})) {
+// Go create goroutine with stopChan
+func (p *ServiceManager) Go(goroutine func(stopChain <-chan struct{})) {
 	stopChain := make(chan struct{})
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	p.routines = append(p.routines, routine{
-		groutine:  groutine,
+		goroutine: goroutine,
 		stopChain: stopChain,
 	})
 	if p.started {
 		p.waitGroup.Add(1)
 		Go(func() {
 			defer p.waitGroup.Done()
-			groutine(stopChain)
+			goroutine(stopChain)
 		})
 	}
 }
 
-// GoCtx  create groutine with ctx
+// GoCtx  create goroutine with ctx
 func (p *ServiceManager) GoCtx(groutine func(ctx context.Context)) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -144,9 +141,9 @@ func (p *ServiceManager) GoCtx(groutine func(ctx context.Context)) {
 func Go(goroutine func()) {
 	GoWithRecovery(
 		goroutine,
-		func(err interface{}) {
-			log.Errorln(err)
-			log.Errorf("%s", debug.Stack())
+		func(err any) {
+			//log.Errorln(err)
+			//log.Errorf("%s", debug.Stack())
 		})
 }
 
@@ -164,7 +161,7 @@ func GoWithRecovery(goroutine func(), customRecover func(err interface{})) {
 
 // TaskManager this structure is designed to manage single-run tasks in the system
 // the purpose of the design is to facilitate the unified management of coroutine and avoid its leakage
-// all coroutine should be exited after CTX is cleared by calcel
+// all coroutine should be exited after CTX is cleared by cancel
 type TaskManager struct {
 	lock      sync.Mutex
 	ctx       context.Context
@@ -172,19 +169,19 @@ type TaskManager struct {
 	waitGroup sync.WaitGroup
 }
 
-// Ctx get base context from TaskManegr
+// Ctx get base context from TaskManger
 func (p *TaskManager) Ctx() context.Context {
 	return p.ctx
 }
 
-// GoCtx start groutine with context
-func (p *TaskManager) GoCtx(groutine func(ctx context.Context)) {
+// GoCtx start goroutine with context
+func (p *TaskManager) GoCtx(goroutine func(ctx context.Context)) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	p.waitGroup.Add(1)
 	Go(func() {
 		defer p.waitGroup.Done()
-		groutine(p.ctx)
+		goroutine(p.ctx)
 	})
 }
 
