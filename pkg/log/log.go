@@ -63,12 +63,12 @@ type (
 	loggerKeyType string
 	// Level Used to indicate the log level
 	Level int32
+	// Option Log options
+	Option func(l *Logger)
 	// TimeEncoder 用来对时间进行格式化
 	TimeEncoder func(t *time.Time) string
 	// CallerEncoder Used to format the call stack
 	CallerEncoder func(file string, line int) string
-	// Option Log options
-	Option func(l *Logger)
 )
 
 // safeWriter thread-safe writer
