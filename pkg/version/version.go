@@ -1,36 +1,43 @@
 package version
 
 import (
+	"encoding/json"
 	"runtime"
 	"time"
 )
 
 var (
-	// Semver holds the current version of controller-manager.
+	// Semver holds the current semver.
 	Semver = "dev"
 	// BuildDate holds the build date of controller-manager.
 	BuildDate = "I don't remember exactly"
 	// StartDate holds the start date of controller-manager.
 	StartDate = time.Now()
-	// GitCommit The commit ID of the current commit.
+	// GitCommit holds the git sha1.
 	GitCommit = "I don't remember exactly"
 )
 
-// Version describes compile time information.
+// Version holds the version information of controller-manager.
 type Version struct {
-	// Semver is the current semver.
+	// Semver is the semantic version of this component.
 	Semver string `json:"version,omitempty"`
-	// GitCommit is the git sha1.
-	GitCommit string `json:"git_commit,omitempty"`
+	// GitCommit holds the git sha1 of this component.
+	GitCommit string `json:"gitCommit,omitempty"`
 	// BuildDate holds the build date of this component.
-	BuildDate string `json:"build_date,omitempty"`
+	BuildDate string `json:"buildDate,omitempty"`
 	// StartDate holds the start date of this component.
 	StartDate time.Time `json:"startDate,omitempty"`
-	// GoVersion is the version of the Go compiler used.
-	GoVersion string `json:"go_version,omitempty"`
+	// GoVersion holds the go version of this component.
+	GoVersion string `json:"goVersion,omitempty"`
 }
 
-// Get returns build info
+// String returns version information as a string.
+func (v *Version) String() string {
+	value, _ := json.Marshal(v)
+	return string(value)
+}
+
+// Get returns the version information.
 func Get() *Version {
 	return &Version{
 		Semver:    Semver,

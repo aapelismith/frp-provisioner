@@ -1,14 +1,9 @@
-FROM alpine as lb-proxy
-ADD ./hack/lb-entrypoint.sh /entrypoint.sh
-RUN apk add iptables && chmod +x /entrypoint.sh
-ENTRYPOINT ["/entrypoint.sh"]
-
-FROM golang:1.17 AS builder
-WORKDIR /app
+FROM golang:1.21 AS builder
+WORKDIR /frp-service-provider
 COPY . .
-RUN GOOS=linux ARCH=amd64 go build -o /bin/loadbalancer cmd/loadbalancer/main.go
+RUN GOOS=linux ARCH=amd64 go build -o /bin/controller-manager cmd/controller-manager/main.go
 
-FROM debian:stretch-slim AS lb-controller
-COPY --from=builder /bin/loadbalancer  /bin/loadbalancer
-COPY --from=builder /app/config/loadbalancer.yaml  /etc/loadbalancer.yaml
-ENTRYPOINT ["/bin/loadbalancer"]
+FROM ubuntu:22.04
+COPY --from=builder /bin/controller-manager  /bin/controller-manager
+COPY --from=builder /frp-service-provider/config/config.tpl.yaml  /etc/controller-manager.yaml
+ENTRYPOINT ["/bin/controller-manager"]

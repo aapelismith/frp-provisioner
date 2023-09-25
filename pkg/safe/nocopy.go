@@ -21,7 +21,7 @@ var _ sync.Locker = &NoCopy{}
 // sample:
 // type Foo struct {
 // noCopy
-//}
+// }
 // a go vet grammar check will prompt a warning
 type NoCopy struct{}
 
