@@ -8,8 +8,6 @@ log:
 
 # frp proxy configuration
 frpc:
-  binary_path: /bin/frpc
-  workspace: /tmp/workspace
   servers:
   - server_addr: tunnel.kunstack.com
     server_port: 7000
