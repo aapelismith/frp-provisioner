@@ -92,7 +92,7 @@ type Options struct {
 	// The default is standard error.
 	//
 	// Note that this setting only affects internal errors; for sample code that
-	// sends error-level logs to a different location from info- and debug-level
+	// sends error-level logs to a different location from info-level and debug-level
 	// logs, see the package-level AdvancedConfiguration example.
 	ErrorOutputPaths []string `json:"error_output_paths" yaml:"error_output_paths"`
 

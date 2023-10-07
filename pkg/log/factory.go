@@ -42,6 +42,11 @@ func WithoutContext() *zap.Logger {
 	return FromContext(context.Background())
 }
 
+// ReplaceGlobals replace the global logger with l
+func ReplaceGlobals(l *zap.Logger) {
+	zap.ReplaceGlobals(l)
+}
+
 // NewLogger create zap logger via Options
 func NewLogger(ctx context.Context, opt *Options) (*zap.Logger, error) {
 	if err := ctx.Err(); err != nil {

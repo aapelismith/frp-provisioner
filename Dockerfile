@@ -1,7 +1,7 @@
 FROM golang:1.21 AS builder
 WORKDIR /frp-service-provider
 COPY . .
-RUN GOOS=linux ARCH=amd64 go build -o /bin/controller-manager cmd/controller-manager/main.go
+RUN GOOS=linux ARCH=amd64 go build -o /bin/controller cmd/controller/main.go
 
 FROM ubuntu:22.04
 COPY --from=builder /bin/controller-manager  /bin/controller-manager

@@ -15,7 +15,7 @@ package log_test
 
 import (
 	"context"
-	"github.com/aapelismith/frp-service-provider/pkg/log"
+	"github.com/aapelismith/frp-provisioner/pkg/log"
 	"testing"
 )
 

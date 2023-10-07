@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The KunStack Authors.
+ * Copyright 2021 Aapeli.Smith<aapeli.nian@gmail.com>.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,15 +15,10 @@ package safe
 
 import (
 	"context"
-	"github.com/aapelismith/frp-service-provider/pkg/log"
+	"github.com/aapelismith/frp-provisioner/pkg/log"
 	"io"
 	"sync"
 )
-
-// defaultRecover default recover function for goroutine
-var defaultRecover = func(err interface{}) {
-	log.WithoutContext().Sugar().Panic(err)
-}
 
 // TaskManager this Interface is designed to manage single-run tasks in the system
 // the purpose of the design is to facilitate the unified management of coroutine and
@@ -80,11 +75,11 @@ func NewTaskManager(parentCtx context.Context) TaskManager {
 
 // Go create goroutine with default recover function
 func Go(goroutine func()) {
-	GoWithRecovery(goroutine, defaultRecover)
+	GoWithRecovery(goroutine, log.WithoutContext().Sugar().Panic)
 }
 
 // GoWithRecovery create goroutine with custom recover function
-func GoWithRecovery(goroutine func(), customRecover func(err any)) {
+func GoWithRecovery(goroutine func(), customRecover func(args ...any)) {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
