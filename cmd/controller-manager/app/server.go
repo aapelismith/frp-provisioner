@@ -19,6 +19,7 @@ import (
 	"github.com/aapelismith/frp-provisioner/cmd/controller-manager/app/options"
 	"github.com/aapelismith/frp-provisioner/pkg/config"
 	"github.com/aapelismith/frp-provisioner/pkg/log"
+	"github.com/aapelismith/frp-provisioner/pkg/server"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -79,7 +80,11 @@ func NewProvisionerCommand(baseCtx context.Context) *cobra.Command {
 			log.ReplaceGlobals(logger)
 			ctx = log.NewContext(ctx, logger)
 
-			return ctx.Err()
+			srv, err := server.New(ctx, cfg)
+			if err != nil {
+				return fmt.Errorf("cannot create server: %v", err)
+			}
+			return srv.Start(ctx)
 		},
 	}
 	cleanFlagSet.BoolP("help", "h", false, fmt.Sprintf("Display help information for command %s", cmd.Name()))

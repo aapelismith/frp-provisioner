@@ -8,21 +8,19 @@ import (
 
 // Server frp controller server
 type Server struct {
-	srv  *service.Service
-	opts *config.FrpOptions
+	srv *service.Service
+	cfg *config.Configuration
 }
 
-// Run start the frp controller server
-func (s *Server) Run(ctx context.Context) error {
-	return nil
-}
-
-// Shutdown the frp controller server
-func (s *Server) Shutdown(ctx context.Context) error {
+// Start the frp controller server
+func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
 // New create frp controller server
-func New(ctx context.Context, opts *config.FrpOptions) (*Server, error) {
-	return nil, nil
+func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
+	return &Server{
+		srv: nil,
+		cfg: cfg,
+	}, nil
 }
