@@ -65,12 +65,12 @@ type Options struct {
 
 	// DisableCaller stops annotating logs with the calling function's file
 	// name and line number. By default, all logs are annotated.
-	DisableCaller bool `json:"disable_caller" yaml:"disable_caller"`
+	DisableCaller bool `json:"disableCaller" yaml:"disableCaller"`
 
 	// DisableStacktrace completely disables automatic stacktrace capturing. By
 	// default, stacktrace are captured for WarnLevel and above logs in
 	// development and ErrorLevel and above in production.
-	DisableStacktrace bool `json:"disable_stacktrace" yaml:"disable_stacktrace"`
+	DisableStacktrace bool `json:"disableStacktrace" yaml:"disableStacktrace"`
 
 	// Sampling sets a sampling policy. A nil SamplingConfig disables sampling.
 	Sampling *zap.SamplingConfig `json:"sampling" yaml:"sampling"`
@@ -82,11 +82,11 @@ type Options struct {
 
 	// EncoderConfig sets options for the chosen encoder. See
 	// zapcore.EncoderConfig for details.
-	EncoderConfig zapcore.EncoderConfig `json:"encoder_config" yaml:"encoder_config"`
+	EncoderConfig zapcore.EncoderConfig `json:"encoderConfig" yaml:"encoderConfig"`
 
 	// OutputPaths is a list of URLs or file paths to write logging output to.
 	// See Open for details.
-	OutputPaths []string `json:"output_paths" yaml:"output_paths"`
+	OutputPaths []string `json:"outputPaths" yaml:"outputPaths"`
 
 	// ErrorOutputPaths is a list of URLs to write internal logger errors to.
 	// The default is standard error.
@@ -94,10 +94,10 @@ type Options struct {
 	// Note that this setting only affects internal errors; for sample code that
 	// sends error-level logs to a different location from info-level and debug-level
 	// logs, see the package-level AdvancedConfiguration example.
-	ErrorOutputPaths []string `json:"error_output_paths" yaml:"error_output_paths"`
+	ErrorOutputPaths []string `json:"errorOutputPaths" yaml:"errorOutputPaths"`
 
 	// InitialFields is a collection of fields to add to the root logger.
-	InitialFields map[string]interface{} `json:"initial_fields" yaml:"initial_fields"`
+	InitialFields map[string]interface{} `json:"initialFields" yaml:"initialFields"`
 }
 
 // SetDefaults sets the default values.

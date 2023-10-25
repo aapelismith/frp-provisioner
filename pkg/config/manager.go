@@ -182,6 +182,10 @@ func (o *ManagerOptions) AddFlags(fs *pflag.FlagSet) {
 
 	fs.DurationVar(&o.RetryPeriod, "manager.leader-election-retry-period", o.RetryPeriod, "Is the duration"+
 		" the LeaderElector clients should wait between tries of actions")
+
+	fs.StringVar(&o.HealthProbeBindAddress, "manager.health-probe-bind-address", o.HealthProbeBindAddress,
+		"Is the TCP address that the controller should bind to for serving health probes It"+
+			" can be set to \"0\" or \"\" to disable serving the health probe.")
 }
 
 func NewManagerOptions() *ManagerOptions {

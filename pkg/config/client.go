@@ -60,6 +60,8 @@ type ClientCommonConfig struct {
 	UDPPacketSize int64 `json:"udpPacketSize,omitempty"`
 	// Client metadata info
 	Metadatas map[string]string `json:"metadatas,omitempty"`
+	// ExternalIPs is an IP-based/DNS-based public entry point, defaulting to the value of serverAddr
+	ExternalIPs []string `json:"externalIPs,omitempty"`
 }
 
 func (c *ClientCommonConfig) SetDefaults() {
@@ -72,6 +74,9 @@ func (c *ClientCommonConfig) SetDefaults() {
 	c.Transport.SetDefaults()
 
 	c.UDPPacketSize = utils.EmptyOr(c.UDPPacketSize, 1500)
+	if len(c.ExternalIPs) == 0 {
+		c.ExternalIPs = []string{c.ServerAddr}
+	}
 }
 
 func (c *ClientCommonConfig) Validate() (errs error) {
@@ -103,6 +108,10 @@ func (c *ClientCommonConfig) Validate() (errs error) {
 		if c.Transport.TLS.TrustedCaFile != "" {
 			logger.Warnf("transport.tls.trustedCaFile is invalid when transport.tls.enable is false")
 		}
+	}
+
+	if len(c.ExternalIPs) == 0 {
+		errs = errors.Join(errs, fmt.Errorf("invalid externalIPs, field is required"))
 	}
 
 	if !lo.Contains(SupportedTransportProtocols, c.Transport.Protocol) {
