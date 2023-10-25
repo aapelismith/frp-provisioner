@@ -21,6 +21,7 @@ import (
 	"github.com/aapelismith/frp-provisioner/pkg/config"
 	"github.com/aapelismith/frp-provisioner/pkg/log"
 	"github.com/aapelismith/frp-provisioner/pkg/server"
+	"github.com/aapelismith/frp-provisioner/pkg/version"
 	"github.com/go-logr/zapr"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -62,6 +63,10 @@ func NewProvisionerCommand(baseCtx context.Context) *cobra.Command {
 			}
 			if help {
 				return cmd.Help()
+			}
+			if provisionerFlags.ShowVersion {
+				fmt.Printf("%s version %s\n", component, version.Get())
+				return nil
 			}
 			if err := provisionerFlags.Validate(); err != nil {
 				return err

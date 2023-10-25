@@ -92,7 +92,13 @@ func (o *FrpOptions) Validate() (err error) {
 	if len(o.Servers) == 0 {
 		err = errors.Join(err, fmt.Errorf("servers is required field"))
 	}
+	indexer := map[string]struct{}{}
 	for _, server := range o.Servers {
+		for _, externalIP := range server.ExternalIPs {
+			if _, ok := indexer[externalIP]; ok {
+				err = errors.Join(err, fmt.Errorf("duplicate externalIP: '%s'", externalIP))
+			}
+		}
 		if err := server.Validate(); err != nil {
 			err = errors.Join(err, fmt.Errorf("incorrect server options of "+
 				"'%s:%d', got: '%w'", server.ServerAddr, server.ServerPort, err))

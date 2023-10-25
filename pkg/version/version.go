@@ -33,7 +33,7 @@ var (
 
 // Version holds the version information of controller.
 type Version struct {
-	FrpVersion string `yaml:"frpVersion"`
+	FrpVersion string `json:"frpVersion,omitempty"`
 	// Semver is the semantic version of this component.
 	Semver string `json:"version,omitempty"`
 	// GitCommit holds the git sha1 of this component.

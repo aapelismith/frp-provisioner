@@ -34,7 +34,8 @@ const defaultConfigFile = "/etc/frp-provisioner/config.toml"
 // In general, please try to avoid adding tags or configuration fields,
 // Because we already have a lot of confusing things.
 type ProvisionerFlags struct {
-	ConfigFile string
+	ConfigFile  string
+	ShowVersion bool
 }
 
 // Validate Verify that the structure meets the requirements
@@ -56,6 +57,7 @@ func (f *ProvisionerFlags) SetDefaults() {
 
 // AddFlags  adds flags to the specified FlagSet
 func (f *ProvisionerFlags) AddFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&f.ShowVersion, "version", f.ShowVersion, "Print version information and exit.")
 	fs.StringVar(&f.ConfigFile, "config", f.ConfigFile, "The Server will load its initial configuration from this file.")
 }
 
