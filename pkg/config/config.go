@@ -136,18 +136,22 @@ type Configuration struct {
 	Log *log.Options `yaml:"log,omitempty" json:"log,omitempty"`
 	// Frp is the frp options for current server
 	Frp *FrpOptions `yaml:"frp,omitempty" json:"frp,omitempty"`
+	// Manager is the controller-manager options for controller-runtime
+	Manager *ManagerOptions `yaml:"manager,omitempty" json:"manager,omitempty"`
 }
 
 // AddFlags adds flags for a specific configuration to the specified FlagSet
 func (c *Configuration) AddFlags(fs *pflag.FlagSet) {
 	c.Log.AddFlags(fs)
 	c.Frp.AddFlags(fs)
+	c.Manager.AddFlags(fs)
 }
 
 // SetDefaults sets the default values for a specific configuration.
 func (c *Configuration) SetDefaults() {
 	c.Log.SetDefaults()
 	c.Frp.SetDefaults()
+	c.Manager.SetDefaults()
 }
 
 // Validate validates a specific configuration.
@@ -158,13 +162,17 @@ func (c *Configuration) Validate() (err error) {
 	if err := c.Frp.Validate(); err != nil {
 		err = errors.Join(err, fmt.Errorf("invalid frp config, got: '%w'", err))
 	}
+	if err := c.Manager.Validate(); err != nil {
+		err = errors.Join(err, fmt.Errorf("invalid manager config, got: '%w'", err))
+	}
 	return err
 }
 
 // NewConfiguration create Configuration
 func NewConfiguration() *Configuration {
 	return &Configuration{
-		Log: log.NewOptions(),
-		Frp: NewFrpOptions(),
+		Log:     log.NewOptions(),
+		Frp:     NewFrpOptions(),
+		Manager: NewManagerOptions(),
 	}
 }

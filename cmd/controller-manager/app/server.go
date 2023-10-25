@@ -15,13 +15,16 @@ package app
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"github.com/aapelismith/frp-provisioner/cmd/controller-manager/app/options"
 	"github.com/aapelismith/frp-provisioner/pkg/config"
 	"github.com/aapelismith/frp-provisioner/pkg/log"
 	"github.com/aapelismith/frp-provisioner/pkg/server"
+	"github.com/go-logr/zapr"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
@@ -63,9 +66,12 @@ func NewProvisionerCommand(baseCtx context.Context) *cobra.Command {
 			if err := provisionerFlags.Validate(); err != nil {
 				return err
 			}
-			err = options.LoadConfigFile(provisionerFlags.ConfigFile, cfg)
+			strictErrors, err := options.LoadConfigFile(provisionerFlags.ConfigFile, cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("config file %s contains errors: %v", provisionerFlags.ConfigFile, err)
+			}
+			if len(strictErrors) > 0 {
+				return fmt.Errorf("config file %s contains strict errors: %v", provisionerFlags.ConfigFile, strictErrors)
 			}
 			if err := options.FlagPrecedence(args, cfg); err != nil {
 				return err
@@ -78,6 +84,8 @@ func NewProvisionerCommand(baseCtx context.Context) *cobra.Command {
 				return fmt.Errorf("cannot create logger: %v", err)
 			}
 			log.ReplaceGlobals(logger)
+			ctrl.SetLogger(zapr.NewLogger(logger))
+
 			ctx = log.NewContext(ctx, logger)
 
 			srv, err := server.New(ctx, cfg)
@@ -90,6 +98,7 @@ func NewProvisionerCommand(baseCtx context.Context) *cobra.Command {
 	cleanFlagSet.BoolP("help", "h", false, fmt.Sprintf("Display help information for command %s", cmd.Name()))
 	provisionerFlags.AddFlags(cleanFlagSet)
 	cfg.AddFlags(cleanFlagSet)
+	cmd.Flags().AddGoFlagSet(flag.CommandLine)
 	cmd.Flags().AddFlagSet(cleanFlagSet) // In order to --help can display content
 	return cmd
 }

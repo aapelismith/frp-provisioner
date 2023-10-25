@@ -31,7 +31,7 @@ type TaskManager interface {
 	GoCtx(goroutine func(ctx context.Context))
 }
 
-// taskManager implement TaskManager
+// taskManager implement TaskManager interface
 type taskManager struct {
 	lock      sync.Mutex
 	ctx       context.Context
