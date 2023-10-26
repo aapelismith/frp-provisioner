@@ -11,4 +11,4 @@
  * limitations under the License.
  */
 
-package controller_test
+package controller

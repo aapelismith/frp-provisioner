@@ -65,7 +65,7 @@ func NewProvisionerCommand(baseCtx context.Context) *cobra.Command {
 				return cmd.Help()
 			}
 			if provisionerFlags.ShowVersion {
-				fmt.Printf("%s version %s\n", component, version.Get())
+				cmd.Println(version.Get())
 				return nil
 			}
 			if err := provisionerFlags.Validate(); err != nil {
@@ -95,7 +95,7 @@ func NewProvisionerCommand(baseCtx context.Context) *cobra.Command {
 
 			srv, err := server.New(ctx, cfg)
 			if err != nil {
-				return fmt.Errorf("cannot create server: %v", err)
+				return fmt.Errorf("cannot create frp-provisioner server: %v", err)
 			}
 			return srv.Start(ctx)
 		},

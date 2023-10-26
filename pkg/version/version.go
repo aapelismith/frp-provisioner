@@ -14,10 +14,9 @@
 package version
 
 import (
-	"encoding/json"
 	"github.com/fatedier/frp/pkg/util/version"
 	"runtime"
-	"time"
+	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -25,8 +24,6 @@ var (
 	Semver = "dev"
 	// BuildDate holds the build date of controller.
 	BuildDate = "I don't remember exactly"
-	// StartDate holds the start date of controller.
-	StartDate = time.Now()
 	// GitCommit holds the git sha1.
 	GitCommit = "I don't remember exactly"
 )
@@ -40,26 +37,23 @@ type Version struct {
 	GitCommit string `json:"gitCommit,omitempty"`
 	// BuildDate holds the build date of this component.
 	BuildDate string `json:"buildDate,omitempty"`
-	// StartDate holds the start date of this component.
-	StartDate time.Time `json:"startDate,omitempty"`
 	// GoVersion holds the go version of this component.
 	GoVersion string `json:"goVersion,omitempty"`
 }
 
 // String returns version information as a string.
 func (v *Version) String() string {
-	value, _ := json.Marshal(v)
-	return string(value)
+	data, _ := yaml.Marshal(v)
+	return string(data)
 }
 
 // Get returns the version information.
 func Get() *Version {
 	return &Version{
-		FrpVersion: version.Full(),
 		Semver:     Semver,
 		GitCommit:  GitCommit,
-		StartDate:  StartDate,
 		BuildDate:  BuildDate,
+		FrpVersion: version.Full(),
 		GoVersion:  runtime.Version(),
 	}
 }

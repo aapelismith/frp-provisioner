@@ -7,8 +7,11 @@ import (
 	"github.com/aapelismith/frp-provisioner/pkg/controller"
 	"github.com/aapelismith/frp-provisioner/pkg/log"
 	"go.uber.org/zap"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -20,6 +23,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
+// default re-sync period for all informer factories
+const defaultRsync = 600 * time.Second
+
 var (
 	scheme = runtime.NewScheme()
 )
@@ -30,23 +36,26 @@ func init() {
 
 // Server frp controller server
 type Server struct {
-	mgr ctrl.Manager
-	cfg *config.Configuration
+	mgr      ctrl.Manager
+	cfg      *config.Configuration
+	informer informers.SharedInformerFactory
 }
 
-// Start the frp controller server
+// Start the frp-provisioner controller server
 func (s *Server) Start(ctx context.Context) error {
 	logger := log.FromContext(ctx)
-	logger.Info("starting frp controller server")
+	logger.Info("starting frp-provisioner controller")
+
+	go s.informer.Start(ctx.Done())
 
 	if err := s.mgr.Start(ctx); err != nil {
-		logger.With(zap.Error(err)).Error("problem running controller server")
-		return fmt.Errorf("problem running controller server, got: %w", err)
+		logger.With(zap.Error(err)).Error("Unable running frp-provisioner controller")
+		return fmt.Errorf("unable running frp-provisioner controller, got: %w", err)
 	}
 	return nil
 }
 
-// New create frp controller server
+// New create frp-provisioner controller server
 func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 	logger := log.FromContext(ctx)
 
@@ -76,22 +85,37 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		GracefulShutdownTimeout:       &cfg.Manager.GracefulShutdownTimeout,
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), opts)
+	kubeConfig, err := ctrl.GetConfig()
+	if err != nil {
+		logger.With(zap.Error(err)).Error("unable to get kubernetes config")
+		return nil, fmt.Errorf("unable to get kubernetes config, got: '%w'", err)
+	}
+
+	client, err := kubernetes.NewForConfig(kubeConfig)
+	if err != nil {
+		logger.With(zap.Error(err)).Error("Unable to create kubernetes client")
+		return nil, fmt.Errorf("unable to create kubernetes client, got: '%w'", err)
+	}
+
+	informer := informers.NewSharedInformerFactory(client, defaultRsync)
+
+	mgr, err := ctrl.NewManager(kubeConfig, opts)
 	if err != nil {
 		logger.With(zap.Error(err)).Error("unable to start manager")
 		return nil, fmt.Errorf("unable to start manager, got: '%w'", err)
 	}
 
-	ctr, err := controller.NewController(cfg.Frp)
+	ctr, err := controller.NewController(ctx, cfg.Frp, client,
+		informer.Core().V1().Services(), informer.Core().V1().Nodes())
 	if err != nil {
 		logger.With(zap.Error(err), zap.String("controller",
-			"ServiceController")).Error("unable to create controller")
+			"FrpController")).Error("unable to create controller")
 		return nil, fmt.Errorf("unable to create controller, got: %w", err)
 	}
 
 	if err := ctr.SetupWithManager(mgr); err != nil {
 		logger.With(zap.Error(err), zap.String("controller",
-			"ServiceController")).Error("unable to setup controller")
+			"FrpController")).Error("unable to setup controller")
 		return nil, fmt.Errorf("unable to setup controller, got: %w", err)
 	}
 
@@ -105,5 +129,5 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		return nil, fmt.Errorf("unable to set up ready check, got: %w", err)
 	}
 
-	return &Server{mgr: mgr, cfg: cfg}, nil
+	return &Server{mgr: mgr, informer: informer, cfg: cfg}, nil
 }
