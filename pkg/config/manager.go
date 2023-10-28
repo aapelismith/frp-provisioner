@@ -10,7 +10,7 @@ import (
 
 const (
 	defaultLeaderElectionResourceLock = "leases"
-	defaultLeaderElectionID           = "frp-provisioner-leader-election"
+	defaultLeaderElectionID           = "frp-provisioner"
 	defaultLeaseDuration              = 15 * time.Second
 	defaultRenewDeadline              = 10 * time.Second
 	defaultRetryPeriod                = 2 * time.Second

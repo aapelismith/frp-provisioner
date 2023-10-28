@@ -44,9 +44,10 @@ type Server struct {
 // Start the frp-provisioner controller server
 func (s *Server) Start(ctx context.Context) error {
 	logger := log.FromContext(ctx)
-	logger.Info("starting frp-provisioner controller")
+	logger.Info("Starting frp-provisioner controller")
 
-	go s.informer.Start(ctx.Done())
+	s.informer.Start(ctx.Done())
+	defer s.informer.Shutdown()
 
 	if err := s.mgr.Start(ctx); err != nil {
 		logger.With(zap.Error(err)).Error("Unable running frp-provisioner controller")
