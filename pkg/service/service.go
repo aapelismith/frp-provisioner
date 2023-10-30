@@ -18,9 +18,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/aapelismith/frp-provisioner/pkg/log"
-	"github.com/aapelismith/frp-provisioner/pkg/version"
 	"github.com/fatedier/frp/pkg/msg"
+	"github.com/frp-sigs/frp-provisioner/pkg/log"
+	"github.com/frp-sigs/frp-provisioner/pkg/version"
 	"io"
 	"net"
 	"runtime"
@@ -36,12 +36,12 @@ import (
 	quic "github.com/quic-go/quic-go"
 	"github.com/samber/lo"
 
-	"github.com/aapelismith/frp-provisioner/pkg/auth"
-	"github.com/aapelismith/frp-provisioner/pkg/config"
 	"github.com/fatedier/frp/pkg/transport"
 	utilnet "github.com/fatedier/frp/pkg/util/net"
 	"github.com/fatedier/frp/pkg/util/util"
 	"github.com/fatedier/frp/pkg/util/xlog"
+	"github.com/frp-sigs/frp-provisioner/pkg/auth"
+	"github.com/frp-sigs/frp-provisioner/pkg/config"
 )
 
 func init() {

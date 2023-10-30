@@ -22,7 +22,7 @@ import (
 	"github.com/samber/lo"
 	"golang.org/x/oauth2/clientcredentials"
 
-	"github.com/aapelismith/frp-provisioner/pkg/config"
+	"github.com/frp-sigs/frp-provisioner/pkg/config"
 )
 
 type OidcAuthProvider struct {

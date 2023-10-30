@@ -17,7 +17,7 @@ package proxy
 import (
 	"reflect"
 
-	"github.com/aapelismith/frp-provisioner/pkg/config"
+	"github.com/frp-sigs/frp-provisioner/pkg/config"
 )
 
 func init() {

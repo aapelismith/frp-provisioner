@@ -15,7 +15,7 @@
 package config
 
 import (
-	"github.com/aapelismith/frp-provisioner/pkg/utils"
+	"github.com/frp-sigs/frp-provisioner/pkg/utils"
 )
 
 type AuthScope string

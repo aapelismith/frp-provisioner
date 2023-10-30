@@ -18,8 +18,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/aapelismith/frp-provisioner/pkg/utils"
 	"github.com/fatedier/frp/pkg/msg"
+	"github.com/frp-sigs/frp-provisioner/pkg/utils"
 	"reflect"
 
 	"github.com/samber/lo"

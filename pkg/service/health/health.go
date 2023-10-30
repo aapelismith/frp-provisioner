@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aapelismith/frp-provisioner/pkg/config"
 	"github.com/fatedier/frp/pkg/util/xlog"
+	"github.com/frp-sigs/frp-provisioner/pkg/config"
 )
 
 var ErrHealthCheckType = errors.New("error health check type")

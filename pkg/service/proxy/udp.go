@@ -26,9 +26,9 @@ import (
 	"github.com/fatedier/golib/errors"
 	libio "github.com/fatedier/golib/io"
 
-	"github.com/aapelismith/frp-provisioner/pkg/config"
 	"github.com/fatedier/frp/pkg/util/limit"
 	utilnet "github.com/fatedier/frp/pkg/util/net"
+	"github.com/frp-sigs/frp-provisioner/pkg/config"
 )
 
 func init() {
@@ -89,7 +89,7 @@ func (pxy *UDPProxy) Close() {
 func (pxy *UDPProxy) InWorkConn(conn net.Conn, _ *msg.StartWorkConn) {
 	xl := pxy.xl
 	xl.Info("incoming a new work connection for udp proxy, %s", conn.RemoteAddr().String())
-	// close resources releated with old workConn
+	// close resources related with old workConn
 	pxy.Close()
 
 	var rwc io.ReadWriteCloser = conn

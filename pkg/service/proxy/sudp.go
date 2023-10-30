@@ -27,9 +27,9 @@ import (
 	"github.com/fatedier/golib/errors"
 	libio "github.com/fatedier/golib/io"
 
-	"github.com/aapelismith/frp-provisioner/pkg/config"
 	"github.com/fatedier/frp/pkg/util/limit"
 	utilnet "github.com/fatedier/frp/pkg/util/net"
+	"github.com/frp-sigs/frp-provisioner/pkg/config"
 )
 
 func init() {

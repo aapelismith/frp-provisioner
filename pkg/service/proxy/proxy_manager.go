@@ -17,17 +17,17 @@ package proxy
 import (
 	"context"
 	"fmt"
-	"github.com/aapelismith/frp-provisioner/pkg/service/event"
 	"github.com/fatedier/frp/pkg/msg"
+	"github.com/frp-sigs/frp-provisioner/pkg/service/event"
 	"net"
 	"reflect"
 	"sync"
 
 	"github.com/samber/lo"
 
-	"github.com/aapelismith/frp-provisioner/pkg/config"
 	"github.com/fatedier/frp/pkg/transport"
 	"github.com/fatedier/frp/pkg/util/xlog"
+	"github.com/frp-sigs/frp-provisioner/pkg/config"
 )
 
 type Manager struct {

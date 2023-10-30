@@ -15,11 +15,11 @@
 package proxy
 
 import (
-	"github.com/aapelismith/frp-provisioner/pkg/config"
 	"github.com/fatedier/frp/pkg/msg"
 	"github.com/fatedier/frp/pkg/nathole"
 	"github.com/fatedier/frp/pkg/transport"
 	utilnet "github.com/fatedier/frp/pkg/util/net"
+	"github.com/frp-sigs/frp-provisioner/pkg/config"
 	fmux "github.com/hashicorp/yamux"
 	"github.com/quic-go/quic-go"
 	"io"

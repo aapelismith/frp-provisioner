@@ -3,7 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
-	"github.com/aapelismith/frp-provisioner/pkg/utils"
+	"github.com/frp-sigs/frp-provisioner/pkg/utils"
 	"github.com/spf13/pflag"
 	"time"
 )

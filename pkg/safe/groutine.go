@@ -15,7 +15,7 @@ package safe
 
 import (
 	"context"
-	"github.com/aapelismith/frp-provisioner/pkg/log"
+	"github.com/frp-sigs/frp-provisioner/pkg/log"
 	"io"
 	"sync"
 )

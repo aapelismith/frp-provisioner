@@ -14,7 +14,7 @@
 package log_test
 
 import (
-	"github.com/aapelismith/frp-provisioner/pkg/log"
+	"github.com/frp-sigs/frp-provisioner/pkg/log"
 	"github.com/spf13/pflag"
 	"testing"
 )

@@ -3,12 +3,14 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/aapelismith/frp-provisioner/pkg/config"
-	"github.com/aapelismith/frp-provisioner/pkg/controller"
-	"github.com/aapelismith/frp-provisioner/pkg/log"
+	"github.com/frp-sigs/frp-provisioner/pkg/api/v1beta1"
+	"github.com/frp-sigs/frp-provisioner/pkg/config"
+	"github.com/frp-sigs/frp-provisioner/pkg/controller/service"
+	"github.com/frp-sigs/frp-provisioner/pkg/log"
 	"go.uber.org/zap"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"time"
@@ -19,7 +21,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -31,6 +32,7 @@ var (
 )
 
 func init() {
+	utilruntime.Must(v1beta1.AddToScheme(scheme))
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 }
 
@@ -106,7 +108,7 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		return nil, fmt.Errorf("unable to start manager, got: '%w'", err)
 	}
 
-	ctr, err := controller.NewController(ctx, cfg.Frp, client,
+	ctr, err := service.NewController(ctx, cfg.Frp, client,
 		informer.Core().V1().Services(), informer.Core().V1().Nodes())
 	if err != nil {
 		logger.With(zap.Error(err), zap.String("controller",

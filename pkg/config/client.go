@@ -17,8 +17,8 @@ package config
 import (
 	"errors"
 	"fmt"
-	"github.com/aapelismith/frp-provisioner/pkg/log"
-	"github.com/aapelismith/frp-provisioner/pkg/utils"
+	"github.com/frp-sigs/frp-provisioner/pkg/log"
+	"github.com/frp-sigs/frp-provisioner/pkg/utils"
 	"github.com/samber/lo"
 	"os"
 )

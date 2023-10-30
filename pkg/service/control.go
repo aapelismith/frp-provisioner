@@ -16,10 +16,10 @@ package service
 
 import (
 	"context"
-	"github.com/aapelismith/frp-provisioner/pkg/auth"
-	"github.com/aapelismith/frp-provisioner/pkg/log"
-	"github.com/aapelismith/frp-provisioner/pkg/service/proxy"
 	"github.com/fatedier/frp/pkg/msg"
+	"github.com/frp-sigs/frp-provisioner/pkg/auth"
+	"github.com/frp-sigs/frp-provisioner/pkg/log"
+	"github.com/frp-sigs/frp-provisioner/pkg/service/proxy"
 	"go.uber.org/zap"
 	"io"
 	"net"
@@ -30,8 +30,8 @@ import (
 	"github.com/fatedier/golib/crypto"
 	"github.com/samber/lo"
 
-	"github.com/aapelismith/frp-provisioner/pkg/config"
 	"github.com/fatedier/frp/pkg/transport"
+	"github.com/frp-sigs/frp-provisioner/pkg/config"
 )
 
 type Control struct {

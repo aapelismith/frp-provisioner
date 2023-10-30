@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"github.com/fatedier/frp/pkg/msg"
 
-	"github.com/aapelismith/frp-provisioner/pkg/config"
+	"github.com/frp-sigs/frp-provisioner/pkg/config"
 )
 
 type Setter interface {

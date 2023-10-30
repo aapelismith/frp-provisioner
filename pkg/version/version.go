@@ -14,46 +14,43 @@
 package version
 
 import (
+	"fmt"
 	"github.com/fatedier/frp/pkg/util/version"
+	"k8s.io/apimachinery/pkg/util/json"
 	"runtime"
-	"sigs.k8s.io/yaml"
 )
 
 var (
-	// Semver holds the current semver.
-	Semver = "dev"
-	// BuildDate holds the build date of controller.
-	BuildDate = "I don't remember exactly"
-	// GitCommit holds the git sha1.
-	GitCommit = "I don't remember exactly"
+	gitVersion = "v0.0.0"
+	buildDate  = "unknown"
+	gitCommit  = "unknown"
 )
 
-// Version holds the version information of controller.
-type Version struct {
-	FrpVersion string `json:"frpVersion,omitempty"`
-	// Semver is the semantic version of this component.
-	Semver string `json:"version,omitempty"`
-	// GitCommit holds the git sha1 of this component.
-	GitCommit string `json:"gitCommit,omitempty"`
-	// BuildDate holds the build date of this component.
-	BuildDate string `json:"buildDate,omitempty"`
-	// GoVersion holds the go version of this component.
-	GoVersion string `json:"goVersion,omitempty"`
+type Info struct {
+	GitVersion string `json:"gitVersion"`
+	GitCommit  string `json:"gitCommit"`
+	BuildDate  string `json:"buildDate"`
+	GoVersion  string `json:"goVersion"`
+	Compiler   string `json:"compiler"`
+	Platform   string `json:"platform"`
+	FrpVersion string `json:"frpVersion"`
 }
 
 // String returns version information as a string.
-func (v *Version) String() string {
-	data, _ := yaml.Marshal(v)
+func (info Info) String() string {
+	data, _ := json.Marshal(info)
 	return string(data)
 }
 
 // Get returns the version information.
-func Get() *Version {
-	return &Version{
-		Semver:     Semver,
-		GitCommit:  GitCommit,
-		BuildDate:  BuildDate,
-		FrpVersion: version.Full(),
+func Get() Info {
+	return Info{
+		GitVersion: gitVersion,
+		GitCommit:  gitCommit,
+		BuildDate:  buildDate,
 		GoVersion:  runtime.Version(),
+		Compiler:   runtime.Compiler,
+		FrpVersion: version.Full(),
+		Platform:   fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 	}
 }
