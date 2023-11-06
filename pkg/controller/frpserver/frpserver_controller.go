@@ -1,5 +1,5 @@
 /*
-Copyright 2023 Aapeli.Smith<aapeli.nian@gmail.com>.
+Copyright 2023 The Frp Sig Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,13 +18,11 @@ package frpserver
 
 import (
 	"context"
-
+	frpv1beta1 "github.com/frp-sigs/frp-provisioner/pkg/api/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	frpv1beta1 "github.com/frp-sigs/frp-provisioner/pkg/api/v1beta1"
 )
 
 // FrpServerReconciler reconciles a FrpServer object
@@ -33,9 +31,9 @@ type FrpServerReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=frp.sigs.gofrp.io,resources=frpservers,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=frp.sigs.gofrp.io,resources=frpservers/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=frp.sigs.gofrp.io,resources=frpservers/finalizers,verbs=update
+//+kubebuilder:rbac:groups=frp.gofrp.io,resources=frpservers,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=frp.gofrp.io,resources=frpservers/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=frp.gofrp.io,resources=frpservers/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

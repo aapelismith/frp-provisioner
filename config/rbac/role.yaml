@@ -5,7 +5,33 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - frp.sigs.gofrp.io
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - frp.gofrp.io
   resources:
   - frpservers
   verbs:
@@ -17,13 +43,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - frp.sigs.gofrp.io
+  - frp.gofrp.io
   resources:
   - frpservers/finalizers
   verbs:
   - update
 - apiGroups:
-  - frp.sigs.gofrp.io
+  - frp.gofrp.io
   resources:
   - frpservers/status
   verbs:

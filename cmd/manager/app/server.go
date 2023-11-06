@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Aapeli.Smith<aapeli.nian@gmail.com>.
+ * Copyright 2021 The Frp Sig Authors.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -33,6 +33,10 @@ const (
 	component     = "frp-provisioner"
 	shortDescribe = "A fast reverse proxy to help you expose kubernetes service behind a NAT or firewall to the internet."
 )
+
+func init() {
+	ctrl.SetLogger(zapr.NewLogger(log.WithoutContext()))
+}
 
 // NewManagerCommand create a new *cobra.Command for controller-manager
 func NewManagerCommand(baseCtx context.Context) *cobra.Command {

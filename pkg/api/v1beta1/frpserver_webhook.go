@@ -25,7 +25,7 @@ import (
 )
 
 // log is for logging in this package.
-var frpServerLog = logf.Log.WithName("frpserver-resource")
+var frpserverlog = logf.Log.WithName("frpserver-resource")
 
 func (r *FrpServer) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -35,25 +35,25 @@ func (r *FrpServer) SetupWebhookWithManager(mgr ctrl.Manager) error {
 
 // TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 
-//+kubebuilder:webhook:path=/mutate-frp-sigs-gofrp-io-v1beta1-frpserver,mutating=true,failurePolicy=fail,sideEffects=None,groups=frp.sigs.gofrp.io,resources=frpservers,verbs=create;update,versions=v1beta1,name=mfrpserver.kb.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/mutate-frp-gofrp-io-v1beta1-frpserver,mutating=true,failurePolicy=fail,sideEffects=None,groups=frp.gofrp.io,resources=frpservers,verbs=create;update,versions=v1beta1,name=mfrpserver.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Defaulter = &FrpServer{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *FrpServer) Default() {
-	frpServerLog.Info("default", "name", r.Name)
+	frpserverlog.Info("default", "name", r.Name)
 
 	// TODO(user): fill in your defaulting logic.
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/validate-frp-sigs-gofrp-io-v1beta1-frpserver,mutating=false,failurePolicy=fail,sideEffects=None,groups=frp.sigs.gofrp.io,resources=frpservers,verbs=create;update,versions=v1beta1,name=vfrpserver.kb.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-frp-gofrp-io-v1beta1-frpserver,mutating=false,failurePolicy=fail,sideEffects=None,groups=frp.gofrp.io,resources=frpservers,verbs=create;update,versions=v1beta1,name=vfrpserver.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Validator = &FrpServer{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *FrpServer) ValidateCreate() (admission.Warnings, error) {
-	frpServerLog.Info("validate create", "name", r.Name)
+	frpserverlog.Info("validate create", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object creation.
 	return nil, nil
@@ -61,7 +61,7 @@ func (r *FrpServer) ValidateCreate() (admission.Warnings, error) {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *FrpServer) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	frpServerLog.Info("validate update", "name", r.Name)
+	frpserverlog.Info("validate update", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object update.
 	return nil, nil
@@ -69,7 +69,7 @@ func (r *FrpServer) ValidateUpdate(old runtime.Object) (admission.Warnings, erro
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *FrpServer) ValidateDelete() (admission.Warnings, error) {
-	frpServerLog.Info("validate delete", "name", r.Name)
+	frpserverlog.Info("validate delete", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil, nil

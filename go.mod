@@ -5,7 +5,6 @@ go 1.20
 require (
 	github.com/fatedier/frp v0.52.3
 	github.com/fatedier/golib v0.1.1-0.20230725122706-dcbaee8eef40
-	github.com/go-logr/logr v1.2.4
 	github.com/go-logr/zapr v1.2.4
 	github.com/hashicorp/yamux v0.1.1
 	github.com/onsi/ginkgo/v2 v2.11.0
@@ -37,6 +36,7 @@ require (
 	github.com/fatedier/beego v0.0.0-20171024143340-6c6a4f5bd5eb // indirect
 	github.com/fatedier/kcp-go v2.0.4-0.20190803094908-fe8645b0a904+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect

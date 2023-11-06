@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.13.0
-  name: frpservers.frp.sigs.gofrp.io
+  name: frpservers.frp.gofrp.io
 spec:
-  group: frp.sigs.gofrp.io
+  group: frp.gofrp.io
   names:
     kind: FrpServer
     listKind: FrpServerList

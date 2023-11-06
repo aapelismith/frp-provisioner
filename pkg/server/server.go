@@ -108,18 +108,19 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		return nil, fmt.Errorf("unable to start manager, got: '%w'", err)
 	}
 
-	ctr, err := service.NewController(ctx, cfg.Frp, client,
-		informer.Core().V1().Services(), informer.Core().V1().Nodes())
-	if err != nil {
+	if err := (&service.ServerReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
 		logger.With(zap.Error(err), zap.String("controller",
-			"FrpController")).Error("unable to create controller")
-		return nil, fmt.Errorf("unable to create controller, got: %w", err)
+			"ServerReconciler")).Error("unable to setup server reconciler")
+		return nil, fmt.Errorf("unable to setup server reconciler, got: %w", err)
 	}
 
-	if err := ctr.SetupWithManager(mgr); err != nil {
-		logger.With(zap.Error(err), zap.String("controller",
-			"FrpController")).Error("unable to setup controller")
-		return nil, fmt.Errorf("unable to setup controller, got: %w", err)
+	if err = (&v1beta1.FrpServer{}).SetupWebhookWithManager(mgr); err != nil {
+		logger.With(zap.Error(err), zap.String("webhook",
+			"FrpServer")).Error("unable to create webhook")
+		return nil, fmt.Errorf("unable to setup FrpServer webhook, got: %w", err)
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

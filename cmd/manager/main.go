@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Aapeli.Smith<aapeli.nian@gmail.com>.
+ * Copyright 2021 The Frp Sig Authors.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -23,6 +23,7 @@ func main() {
 	l := log.WithoutContext().Sugar()
 	stopCtx := signals.SetupSignalHandler()
 	cmd := app.NewManagerCommand(stopCtx)
+
 	if err := cmd.Execute(); err != nil {
 		l.Fatalln(err)
 	}

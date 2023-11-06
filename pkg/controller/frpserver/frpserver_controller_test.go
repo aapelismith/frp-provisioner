@@ -1,5 +1,5 @@
 /*
-Copyright 2023 Aapeli.Smith<aapeli.nian@gmail.com>.
+Copyright 2023 The Frp Sig Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package frpserver
 
 import (
 	"fmt"
+	frpv1beta1 "github.com/frp-sigs/frp-provisioner/pkg/api/v1beta1"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -31,8 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	frpv1beta1 "github.com/frp-sigs/frp-provisioner/pkg/api/v1beta1"
 	//+kubebuilder:scaffold:imports
 )
 
