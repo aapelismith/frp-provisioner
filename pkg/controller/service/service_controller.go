@@ -33,7 +33,7 @@ type ServerReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups="",resources=services/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups="",resources=services/finalizers,verbs=update
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete

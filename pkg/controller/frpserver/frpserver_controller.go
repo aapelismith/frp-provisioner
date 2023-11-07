@@ -34,6 +34,8 @@ type FrpServerReconciler struct {
 //+kubebuilder:rbac:groups=frp.gofrp.io,resources=frpservers,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=frp.gofrp.io,resources=frpservers/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=frp.gofrp.io,resources=frpservers/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=secrets/status,verbs=get
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
