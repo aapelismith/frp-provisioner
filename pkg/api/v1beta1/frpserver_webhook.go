@@ -25,7 +25,7 @@ import (
 )
 
 // log is for logging in this package.
-var frpserverlog = logf.Log.WithName("frpserver-resource")
+var frpServerLog = logf.Log.WithName("frpserver-resource")
 
 func (r *FrpServer) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -41,7 +41,7 @@ var _ webhook.Defaulter = &FrpServer{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *FrpServer) Default() {
-	frpserverlog.Info("default", "name", r.Name)
+	frpServerLog.Info("default", "name", r.Name)
 
 	// TODO(user): fill in your defaulting logic.
 }
@@ -53,7 +53,7 @@ var _ webhook.Validator = &FrpServer{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *FrpServer) ValidateCreate() (admission.Warnings, error) {
-	frpserverlog.Info("validate create", "name", r.Name)
+	frpServerLog.Info("validate create", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object creation.
 	return nil, nil
@@ -61,7 +61,7 @@ func (r *FrpServer) ValidateCreate() (admission.Warnings, error) {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *FrpServer) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	frpserverlog.Info("validate update", "name", r.Name)
+	frpServerLog.Info("validate update", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object update.
 	return nil, nil
@@ -69,7 +69,7 @@ func (r *FrpServer) ValidateUpdate(old runtime.Object) (admission.Warnings, erro
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *FrpServer) ValidateDelete() (admission.Warnings, error) {
-	frpserverlog.Info("validate delete", "name", r.Name)
+	frpServerLog.Info("validate delete", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil, nil
