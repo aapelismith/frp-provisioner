@@ -1,0 +1,12 @@
+apiVersion: frp.gofrp.io/v1beta1
+kind: FrpServer
+metadata:
+  labels:
+    app.kubernetes.io/name: frpserver
+    app.kubernetes.io/instance: frpserver-sample
+    app.kubernetes.io/part-of: frp-provisioner
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: frp-provisioner
+  name: frpserver-sample
+spec:
+  # TODO(user): Add fields here

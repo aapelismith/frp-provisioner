@@ -1,0 +1,31 @@
+# permissions for end users to edit frpservers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: frpserver-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: frp-provisioner
+    app.kubernetes.io/part-of: frp-provisioner
+    app.kubernetes.io/managed-by: kustomize
+  name: frpserver-editor-role
+rules:
+- apiGroups:
+  - frp.gofrp.io
+  resources:
+  - frpservers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - frp.gofrp.io
+  resources:
+  - frpservers/status
+  verbs:
+  - get
