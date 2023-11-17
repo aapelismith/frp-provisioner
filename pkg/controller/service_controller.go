@@ -14,16 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package service
+package controller
 
 import (
 	"context"
-	frpv1beta1 "github.com/frp-sigs/frp-provisioner/pkg/api/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -60,6 +58,6 @@ func (r *ServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Service{}).
 		Owns(&v1.Pod{}).
-		Watches(&frpv1beta1.FrpServer{}, handler.EnqueueRequestsFromMapFunc(nil)).
+		//Watches(&frpv1beta1.FrpServer{}, handler.EnqueueRequestsFromMapFunc(nil)).
 		Complete(r)
 }

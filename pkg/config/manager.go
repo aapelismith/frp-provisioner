@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/frp-sigs/frp-provisioner/pkg/utils"
 	"github.com/spf13/pflag"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -17,6 +19,9 @@ const (
 	defaultGracefulShutdownPeriod     = 30 * time.Second
 	defaultReadinessEndpoint          = "/readyz"
 	defaultLivenessEndpoint           = "/healthz"
+	defaultWebhookBindAddress         = ":9443"
+	defaultWebhookCertName            = "tls.crt"
+	defaultWebhookKeyName             = "tls.key"
 )
 
 // ManagerOptions  contains the configuration for the manager.
@@ -85,6 +90,26 @@ type ManagerOptions struct {
 	// Note: If certificate or key doesn't exist a self-signed certificate will be used.
 	MetricsKeyName string `json:"metricsKeyName" yaml:"metricsKeyName"`
 
+	// WebhookBindAddress is the address that the server will listen on.
+	// Defaults to "" - all addresses.
+	WebhookBindAddress string `json:"webhookBindAddress" yaml:"webhookBindAddress"`
+
+	// CertDir is the directory that contains the server key and certificate. Defaults to
+	// <temp-dir>/k8s-webhook-server/serving-certs.
+	WebhookCertDir string `json:"webhookCertDir" yaml:"webhookCertDir"`
+
+	// CertName is the server certificate name. Defaults to tls.crt.
+	WebhookCertName string `json:"webhookCertName" yaml:"webhookCertName"`
+
+	// KeyName is the server key name. Defaults to tls.key.
+	//
+	// Note: This option is only used when TLSOpts does not set GetCertificate.
+	WebhookKeyName string `json:"webhookKeyName" yaml:"webhookKeyName"`
+
+	// ClientCAName is the CA certificate name which server used to verify remote(client)'s certificate.
+	// Defaults to "", which means server does not verify client's certificate.
+	WebhookClientCAName string `json:"webhookClientCAName" yaml:"webhookClientCAName"`
+
 	// HealthProbeBindAddress is the TCP address that the controller should bind to
 	// for serving health probes
 	// It can be set to "0" or "" to disable serving the health probe.
@@ -121,6 +146,10 @@ func (o *ManagerOptions) SetDefaults() {
 	o.ReadinessEndpointName = utils.EmptyOr(o.ReadinessEndpointName, defaultReadinessEndpoint)
 	o.LivenessEndpointName = utils.EmptyOr(o.LivenessEndpointName, defaultLivenessEndpoint)
 	o.GracefulShutdownTimeout = utils.EmptyOr(o.GracefulShutdownTimeout, defaultGracefulShutdownPeriod)
+	o.WebhookBindAddress = utils.EmptyOr(o.WebhookBindAddress, defaultWebhookBindAddress)
+	o.WebhookCertDir = utils.EmptyOr(o.WebhookCertDir, filepath.Join(os.TempDir(), "k8s-webhook-server", "serving-certs"))
+	o.WebhookCertName = utils.EmptyOr(o.WebhookCertName, defaultWebhookCertName)
+	o.WebhookKeyName = utils.EmptyOr(o.WebhookKeyName, defaultWebhookKeyName)
 }
 
 // Validate validates the frpc service options.
@@ -186,6 +215,8 @@ func (o *ManagerOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.HealthProbeBindAddress, "manager.health-probe-bind-address", o.HealthProbeBindAddress,
 		"Is the TCP address that the controller should bind to for serving health probes It"+
 			" can be set to \"0\" or \"\" to disable serving the health probe.")
+
+	fs.StringVar(&o.MetricsBindAddress, "manager.metrics-bind-address", o.MetricsBindAddress, "The address the metric endpoint binds to.")
 }
 
 func NewManagerOptions() *ManagerOptions {

@@ -1,8 +1,8 @@
 # frp-provisioner
-// TODO(user): Add simple overview of use/purpose
+A fast reverse proxy to help you expose kubernetes service behind a NAT or firewall to the internet.
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+A fast reverse proxy to help you expose kubernetes service behind a NAT or firewall to the internet.
 
 ## Getting Started
 You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
@@ -91,4 +91,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-

@@ -94,6 +94,12 @@ spec:
                 description: DNSServer specifies a DNS server address for FRPC to
                   use. If this value is "", the default DNS will be used.
                 type: string
+              externalIPs:
+                description: ExternalIPs is set for load-balancer ingress points that
+                  are DNS/IP based
+                items:
+                  type: string
+                type: array
               loginFailExit:
                 description: LoginFailExit controls whether the client should exit
                   after a failed login attempt. If false, the client will retry until
@@ -159,7 +165,7 @@ spec:
                   proxyURL:
                     description: ProxyURL specifies a proxy address to connect to
                       the server through. If this value is "", the server will be
-                      connected to directly. By default, this value is read from the
+                      connected directly. By default, this value is read from the
                       "http_proxy" environment variable.
                     type: string
                   quic:
@@ -189,6 +195,14 @@ spec:
                     description: TLS specifies TLS settings for the connection to
                       the server.
                     properties:
+                      caFileName:
+                        description: CaFileName specifies the filename of the trusted
+                          ca file on secretRef.
+                        type: string
+                      certFileName:
+                        description: CertFileName specifies the filename of the cert
+                          file on secretRef.
+                        type: string
                       disableCustomTLSFirstByte:
                         description: If DisableCustomTLSFirstByte is set to false,
                           frpc will establish a connection with frps using the first
@@ -197,15 +211,19 @@ spec:
                           is disabled by default.
                         type: boolean
                       enable:
-                        description: TLSEnable specifies whether TLS should be used
-                          when communicating with the server. If "tls.certFile" and
-                          "tls.keyFile" are valid, client will load the supplied tls
-                          configuration. Since v0.50.0, the default value has been
-                          changed to true, and tls is enabled by default.
+                        description: Enable specifies whether TLS should be used when
+                          communicating with the server. If "tls.certFile" and "tls.keyFile"
+                          are valid, client will load the supplied tls configuration.
+                          Since v0.50.0, the default value has been changed to true,
+                          and tls is enabled by default.
                         type: boolean
+                      keyFileName:
+                        description: KeyFileName specifies the filename of the secret
+                          key file on secretRef.
+                        type: string
                       secretRef:
-                        description: secretRef is name of the tls secret for transport.
-                          If provided tls key and cert
+                        description: SecretRef is name of the tls secret for transport.
+                          It provided tls key, cert and CA file
                         properties:
                           name:
                             description: name is unique within a namespace to reference
@@ -221,20 +239,6 @@ spec:
                         description: ServerName specifies the custom server name of
                           tls certificate. By default, server name if same to ServerAddr.
                         type: string
-                      trustedCaSecretRef:
-                        description: TrustedCaSecretRef is name of the tls trusted
-                          ca for transport.
-                        properties:
-                          name:
-                            description: name is unique within a namespace to reference
-                              a secret resource.
-                            type: string
-                          namespace:
-                            description: namespace defines the space within which
-                              the secret name must be unique.
-                            type: string
-                        type: object
-                        x-kubernetes-map-type: atomic
                     type: object
                 type: object
               udpPacketSize:
@@ -251,6 +255,78 @@ spec:
           status:
             description: FrpServerStatus defines the observed state of FrpServer
             properties:
+              conditions:
+                description: Current service state
+                items:
+                  description: "Condition contains details for one aspect of the current
+                    state of this API Resource. --- This struct is intended for direct
+                    use as an array at the field path .status.conditions.  For example,
+                    \n type FooStatus struct{ // Represents the observations of a
+                    foo's current state. // Known .status.conditions.type are: \"Available\",
+                    \"Progressing\", and \"Degraded\" // +patchMergeKey=type // +patchStrategy=merge
+                    // +listType=map // +listMapKey=type Conditions []metav1.Condition
+                    `json:\"conditions,omitempty\" patchStrategy:\"merge\" patchMergeKey:\"type\"
+                    protobuf:\"bytes,1,rep,name=conditions\"` \n // other fields }"
+                  properties:
+                    lastTransitionTime:
+                      description: lastTransitionTime is the last time the condition
+                        transitioned from one status to another. This should be when
+                        the underlying condition changed.  If that is not known, then
+                        using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: message is a human readable message indicating
+                        details about the transition. This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: observedGeneration represents the .metadata.generation
+                        that the condition was set based upon. For instance, if .metadata.generation
+                        is currently 12, but the .status.conditions[x].observedGeneration
+                        is 9, the condition is out of date with respect to the current
+                        state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: reason contains a programmatic identifier indicating
+                        the reason for the condition's last transition. Producers
+                        of specific condition types may define expected values and
+                        meanings for this field, and whether the values are considered
+                        a guaranteed API. The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        --- Many .condition.type values are consistent across resources
+                        like Available, but because arbitrary conditions can be useful
+                        (see .node.status.conditions), the ability to deconflict is
+                        important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
               phase:
                 description: The phase of a FrpServer is a simple, high-level summary
                   of where the FrpServer is in its lifecycle.

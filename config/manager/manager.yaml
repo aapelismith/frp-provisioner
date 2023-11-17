@@ -67,9 +67,9 @@ spec:
         #   type: RuntimeDefault
       containers:
       - command:
-        - /manager
+        - /bin/manager
         args:
-        - --leader-elect
+        - --manager.leader-election
         image: controller:latest
         name: manager
         securityContext:
@@ -98,5 +98,15 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
+        volumeMounts:
+          - mountPath: /etc/manager/
+            name: config
+            readOnly: true
+        imagePullPolicy: IfNotPresent
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            defaultMode: 420
+            name: controller-manager

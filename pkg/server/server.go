@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"github.com/frp-sigs/frp-provisioner/pkg/api/v1beta1"
 	"github.com/frp-sigs/frp-provisioner/pkg/config"
-	"github.com/frp-sigs/frp-provisioner/pkg/controller/service"
+	"github.com/frp-sigs/frp-provisioner/pkg/controller"
 	"github.com/frp-sigs/frp-provisioner/pkg/log"
+	webhook2 "github.com/frp-sigs/frp-provisioner/pkg/webhook"
 	"go.uber.org/zap"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"net"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"strconv"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -38,18 +40,14 @@ func init() {
 
 // Server frp controller server
 type Server struct {
-	mgr      ctrl.Manager
-	cfg      *config.Configuration
-	informer informers.SharedInformerFactory
+	mgr ctrl.Manager
+	cfg *config.Configuration
 }
 
 // Start the frp-provisioner controller server
 func (s *Server) Start(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Starting frp-provisioner controller")
-
-	s.informer.Start(ctx.Done())
-	defer s.informer.Shutdown()
 
 	if err := s.mgr.Start(ctx); err != nil {
 		logger.With(zap.Error(err)).Error("Unable running frp-provisioner controller")
@@ -62,6 +60,30 @@ func (s *Server) Start(ctx context.Context) error {
 func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 	logger := log.FromContext(ctx)
 
+	webhookHost, port, err := net.SplitHostPort(cfg.Manager.WebhookBindAddress)
+	if err != nil {
+		logger.With(zap.Error(err)).Error("unable to split host and port")
+		return nil, fmt.Errorf("unable to split host and port, got: '%w'", err)
+	}
+
+	webhookPort := webhook.DefaultPort
+	if port == "" {
+		webhookPort, err = strconv.Atoi(port)
+		if err != nil {
+			logger.With(zap.Error(err)).Error("unable to convert port to number")
+			return nil, fmt.Errorf("unable to convert port to number, got: '%w'", err)
+		}
+	}
+
+	webhookOpts := webhook.Options{
+		Host:         webhookHost,
+		Port:         webhookPort,
+		CertDir:      cfg.Manager.WebhookCertDir,
+		CertName:     cfg.Manager.WebhookCertName,
+		KeyName:      cfg.Manager.WebhookKeyName,
+		ClientCAName: cfg.Manager.WebhookClientCAName,
+	}
+
 	metricsOpts := metricsserver.Options{
 		CertDir:       cfg.Manager.MetricsCertDir,
 		CertName:      cfg.Manager.MetricsCertName,
@@ -72,7 +94,6 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 
 	opts := ctrl.Options{
 		Scheme:                        scheme,
-		Metrics:                       metricsOpts,
 		LeaderElection:                cfg.Manager.LeaderElection,
 		LeaderElectionResourceLock:    cfg.Manager.LeaderElectionResourceLock,
 		LeaderElectionNamespace:       cfg.Manager.LeaderElectionNamespace,
@@ -81,6 +102,8 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		LeaseDuration:                 &cfg.Manager.LeaseDuration,
 		RenewDeadline:                 &cfg.Manager.RenewDeadline,
 		RetryPeriod:                   &cfg.Manager.RetryPeriod,
+		Metrics:                       metricsOpts,
+		WebhookServer:                 webhook.NewServer(webhookOpts),
 		HealthProbeBindAddress:        cfg.Manager.HealthProbeBindAddress,
 		ReadinessEndpointName:         cfg.Manager.ReadinessEndpointName,
 		LivenessEndpointName:          cfg.Manager.LivenessEndpointName,
@@ -94,21 +117,13 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		return nil, fmt.Errorf("unable to get kubernetes config, got: '%w'", err)
 	}
 
-	client, err := kubernetes.NewForConfig(kubeConfig)
-	if err != nil {
-		logger.With(zap.Error(err)).Error("Unable to create kubernetes client")
-		return nil, fmt.Errorf("unable to create kubernetes client, got: '%w'", err)
-	}
-
-	informer := informers.NewSharedInformerFactory(client, defaultRsync)
-
 	mgr, err := ctrl.NewManager(kubeConfig, opts)
 	if err != nil {
 		logger.With(zap.Error(err)).Error("unable to start manager")
 		return nil, fmt.Errorf("unable to start manager, got: '%w'", err)
 	}
 
-	if err := (&service.ServerReconciler{
+	if err := (&controller.ServerReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
@@ -117,7 +132,7 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		return nil, fmt.Errorf("unable to setup server reconciler, got: %w", err)
 	}
 
-	if err = (&v1beta1.FrpServer{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&webhook2.FrpServer{}).SetupWebhookWithManager(mgr); err != nil {
 		logger.With(zap.Error(err), zap.String("webhook",
 			"FrpServer")).Error("unable to create webhook")
 		return nil, fmt.Errorf("unable to setup FrpServer webhook, got: %w", err)
@@ -133,5 +148,5 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		return nil, fmt.Errorf("unable to set up ready check, got: %w", err)
 	}
 
-	return &Server{mgr: mgr, informer: informer, cfg: cfg}, nil
+	return &Server{mgr: mgr, cfg: cfg}, nil
 }

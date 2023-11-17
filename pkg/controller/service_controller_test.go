@@ -11,4 +11,4 @@
  * limitations under the License.
  */
 
-package service_test
+package controller_test

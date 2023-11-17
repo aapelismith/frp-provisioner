@@ -19,6 +19,7 @@ resources:
 - ../rbac
 - ../manager
 - ../webhook
+- ./manager_webhook_cert.yaml
 
 # Protect the /metrics endpoint by putting it behind auth.
 # If you want your controller-manager to expose the /metrics
@@ -33,3 +34,52 @@ kind: Kustomization
 patches:
 - path: manager_auth_proxy_patch.yaml
 - path: manager_webhook_patch.yaml
+- path: manager_config_patch.yaml
+
+replacements:
+  - source:
+      kind: Service
+      version: v1
+      name: webhook-service
+      fieldPath: .metadata.name # name of the service
+    targets:
+      - select:
+          kind: Job
+          name: webhook-certgen-create
+          version: v1
+        fieldPaths:
+          - .spec.template.spec.containers.[name=create].env.[name=SERVICE_NAME].value
+  - source:
+      kind: MutatingWebhookConfiguration
+      version: v1
+      group: admissionregistration.k8s.io
+      name: mutating-webhook-configuration
+      fieldPath: .metadata.name # name of the service
+    targets:
+      - select:
+          kind: Job
+          name: webhook-certgen-patch-mutating
+          version: v1
+        fieldPaths:
+          - .spec.template.spec.containers.[name=patch].args.1
+        options:
+          delimiter: '='
+          index: 1
+          create: true
+  - source:
+      kind: ValidatingWebhookConfiguration
+      version: v1
+      group: admissionregistration.k8s.io
+      name: validating-webhook-configuration
+      fieldPath: .metadata.name # name of the service
+    targets:
+      - select:
+          kind: Job
+          name: webhook-certgen-patch-validating
+          version: v1
+        fieldPaths:
+          - .spec.template.spec.containers.[name=patch].args.1
+        options:
+          delimiter: '='
+          index: 1
+          create: true

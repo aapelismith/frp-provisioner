@@ -15,7 +15,7 @@ spec:
           capabilities:
             drop:
               - "ALL"
-        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.14.1
+        image: kubesphere/kube-rbac-proxy:v0.14.0
         args:
         - "--secure-listen-address=0.0.0.0:8443"
         - "--upstream=http://127.0.0.1:8080/"
@@ -34,6 +34,6 @@ spec:
             memory: 64Mi
       - name: manager
         args:
-        - "--health-probe-bind-address=:8081"
-        - "--metrics-bind-address=127.0.0.1:8080"
-        - "--leader-elect"
+        - "--manager.health-probe-bind-address=:8081"
+        - "--manager.metrics-bind-address=127.0.0.1:8080"
+        - "--manager.leader-election"

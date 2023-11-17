@@ -29,6 +29,11 @@ type FrpServerAuthMethod string
 // +enum
 type FrpServerPhase string
 
+// FrpServerTransportProtocol specifies the protocol to use when interacting with the server.
+// Valid values are "tcp", "kcp", "quic", "websocket" and "wss". By default, this value
+// is "tcp".
+type FrpServerTransportProtocol string
+
 // FrpServerAuthScope is additional scope in auth info
 // +enum
 type FrpServerAuthScope string
@@ -43,6 +48,14 @@ const (
 const (
 	FrpServerAuthScopeHeartBeats   FrpServerAuthScope = "HeartBeats"
 	FrpServerAuthScopeNewWorkConns FrpServerAuthScope = "NewWorkConns"
+)
+
+const (
+	FrpServerTransportProtocolTCP       FrpServerTransportProtocol = "tcp"
+	FrpServerTransportProtocolKCP       FrpServerTransportProtocol = "kcp"
+	FrpServerTransportProtocolQUIC      FrpServerTransportProtocol = "quic"
+	FrpServerTransportProtocolWebsocket FrpServerTransportProtocol = "websocket"
+	FrpServerTransportProtocolWSS       FrpServerTransportProtocol = "wss"
 )
 
 // These are the valid statuses of pods.
@@ -66,12 +79,14 @@ type FrpServerAuth struct {
 	Method FrpServerAuthMethod `json:"method,omitempty"`
 	// AdditionalScopes specify whether to include auth info in additional scope.
 	// Current supported scopes are: "HeartBeats", "NewWorkConns".
+	// +optional
 	AdditionalScopes []FrpServerAuthScope `json:"additionalScopes,omitempty"`
 	// Token specifies the authorization token used to create keys to be sent
 	// to the server. The server must have a matching token for authorization
 	// to succeed.  By default, this value is "".
-	Token string            `json:"token,omitempty"`
-	OIDC  FrpServerAuthOIDC `json:"oidc,omitempty"`
+	Token string `json:"token,omitempty"`
+	// +optional
+	OIDC *FrpServerAuthOIDC `json:"oidc,omitempty"`
 }
 
 type FrpServerAuthOIDC struct {
@@ -86,9 +101,11 @@ type FrpServerAuthOIDC struct {
 	Scope string `json:"scope,omitempty"`
 	// TokenEndpointURL specifies the URL which implements OIDC Token Endpoint.
 	// It will be used to get an OIDC token.
+	// +optional
 	TokenEndpointURL string `json:"tokenEndpointURL,omitempty"`
 	// AdditionalEndpointParams specifies additional parameters to be sent
 	// this field will be transfer to map[string][]string in OIDC token generator.
+	// +optional
 	AdditionalEndpointParams map[string]string `json:"additionalEndpointParams,omitempty"`
 }
 
@@ -96,7 +113,7 @@ type FrpServerTransport struct {
 	// Protocol specifies the protocol to use when interacting with the server.
 	// Valid values are "tcp", "kcp", "quic", "websocket" and "wss". By default, this value
 	// is "tcp".
-	Protocol string `json:"protocol,omitempty"`
+	Protocol FrpServerTransportProtocol `json:"protocol,omitempty"`
 	// The maximum amount of time a dial to server will wait for a connect to complete.
 	DialServerTimeout int64 `json:"dialServerTimeout,omitempty"`
 	// DialServerKeepAlive specifies the interval between keep-alive probes for an active network connection between frpc and frps.
@@ -106,7 +123,7 @@ type FrpServerTransport struct {
 	// Note: This value only use in TCP/Websocket protocol. Not support in KCP protocol.
 	ConnectServerLocalIP string `json:"connectServerLocalIP,omitempty"`
 	// ProxyURL specifies a proxy address to connect to the server through. If
-	// this value is "", the server will be connected to directly. By default,
+	// this value is "", the server will be connected directly. By default,
 	// this value is read from the "http_proxy" environment variable.
 	ProxyURL string `json:"proxyURL,omitempty"`
 	// PoolCount specifies the number of connections the client will make to
@@ -121,7 +138,7 @@ type FrpServerTransport struct {
 	// If TCPMux is true, heartbeat of application layer is unnecessary because it can only rely on heartbeat in TCPMux.
 	TCPMuxKeepaliveInterval int64 `json:"tcpMuxKeepaliveInterval,omitempty"`
 	// QUIC protocol options.
-	QUIC FrpServerTransportQUIC `json:"quic,omitempty"`
+	QUIC *FrpServerTransportQUIC `json:"quic,omitempty"`
 	// HeartBeatInterval specifies at what interval heartbeats are sent to the
 	// server, in seconds. It is not recommended to change this value. By
 	// default, this value is 30. Set negative value to disable it.
@@ -142,17 +159,19 @@ type FrpServerTransportQUIC struct {
 }
 
 type FrpServerTransportTLS struct {
-	// TLSEnable specifies whether TLS should be used when communicating
+	// Enable specifies whether TLS should be used when communicating
 	// with the server. If "tls.certFile" and "tls.keyFile" are valid,
 	// client will load the supplied tls configuration.
 	// Since v0.50.0, the default value has been changed to true, and tls is enabled by default.
 	Enable *bool `json:"enable,omitempty"`
-	// secretRef is name of the tls secret for transport. If provided
-	// tls key and cert
-	// +optional
+	// SecretRef is name of the tls secret for transport. It provided tls key, cert and CA file
 	SecretRef *v1.SecretReference `json:"secretRef,omitempty"`
-	// TrustedCaSecretRef is name of the tls trusted ca for transport.
-	TrustedCaSecretRef *v1.SecretReference `json:"trustedCaSecretRef,omitempty"`
+	// CertFileName specifies the filename of the cert file on secretRef.
+	CertFileName string `json:"certFileName,omitempty"`
+	// KeyFileName specifies the filename of the secret key file on secretRef.
+	KeyFileName string `json:"keyFileName,omitempty"`
+	// CaFileName specifies the filename of the trusted ca file on secretRef.
+	CaFileName string `json:"caFileName,omitempty"`
 	// ServerName specifies the custom server name of tls certificate. By
 	// default, server name if same to ServerAddr.
 	ServerName string `json:"serverName,omitempty"`
@@ -179,6 +198,8 @@ type FrpServerSpec struct {
 	// ServerPort specifies the port to connect to the server on. By default,
 	// this value is 7000.
 	ServerPort int `json:"serverPort,omitempty"`
+	// ExternalIPs is set for load-balancer ingress points that are DNS/IP based
+	ExternalIPs []string `json:"externalIPs,omitempty"`
 	// STUN server to help penetrate NAT hole.
 	NatHoleSTUNServer string `json:"natHoleStunServer,omitempty"`
 	// DNSServer specifies a DNS server address for FRPC to use. If this value
@@ -200,6 +221,13 @@ type FrpServerSpec struct {
 type FrpServerStatus struct {
 	// The phase of a FrpServer is a simple, high-level summary of where the FrpServer is in its lifecycle.
 	Phase FrpServerPhase `json:"phase"`
+	// Current service state
+	// +optional
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 	// Reason A brief CamelCase message indicating details about why the pod is in this state.
 	// +optional
 	Reason string `json:"reason,omitempty"`
