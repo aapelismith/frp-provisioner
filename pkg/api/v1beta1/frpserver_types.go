@@ -58,17 +58,23 @@ const (
 	FrpServerTransportProtocolWSS       FrpServerTransportProtocol = "wss"
 )
 
+const (
+	ReasonInitialized          = "Initialized"
+	ReasonInitializeFailed     = "InitializeFailed"
+	ReasonGenerateConfigFailed = "GenerateConfigFailed"
+)
+
 // These are the valid statuses of pods.
 const (
-	// FrpServerPending means the frp server object has been accepted by the system, but health testing has not started yet
-	FrpServerPending FrpServerPhase = "Pending"
-	// FrpServerHealthy means that the health check of the FRP server has passed
-	FrpServerHealthy FrpServerPhase = "Healthy"
-	// FrpServerUnhealthy Means that the health check of the FRP server has not been passed
-	FrpServerUnhealthy FrpServerPhase = "Unhealthy"
-	// FrpServerUnknown means that for some reason the state of the pod could not be obtained, typically due
+	// FrpServerPhasePending means the frp server object has been accepted by the system, but health testing has not started yet
+	FrpServerPhasePending FrpServerPhase = "Pending"
+	// FrpServerPhaseHealthy means that the health check of the FRP server has passed
+	FrpServerPhaseHealthy FrpServerPhase = "Healthy"
+	// FrpServerPhaseUnhealthy Means that the health check of the FRP server has not been passed
+	FrpServerPhaseUnhealthy FrpServerPhase = "Unhealthy"
+	// FrpServerPhaseUnknown means that for some reason the state of the pod could not be obtained, typically due
 	// to an error in communicating with the host of the FrpServer.
-	FrpServerUnknown FrpServerPhase = "Unknown"
+	FrpServerPhaseUnknown FrpServerPhase = "Unknown"
 )
 
 type FrpServerAuth struct {
@@ -217,6 +223,18 @@ type FrpServerSpec struct {
 	Metadatas map[string]string `json:"metadatas,omitempty"`
 }
 
+// ServiceReference represents a Service Reference. It has enough information to retrieve service
+// in any namespace
+// +structType=atomic
+type ServiceReference struct {
+	// name is unique within a namespace to reference a secret resource.
+	// +optional
+	Name string `json:"name,omitempty"`
+	// namespace defines the space within which the secret name must be unique.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+}
+
 // FrpServerStatus defines the observed state of FrpServer
 type FrpServerStatus struct {
 	// The phase of a FrpServer is a simple, high-level summary of where the FrpServer is in its lifecycle.
@@ -233,12 +251,17 @@ type FrpServerStatus struct {
 	Reason string `json:"reason,omitempty"`
 	// Services is a list of all services
 	// +optional
-	ServiceReferences []v1.TypedObjectReference `json:"serviceReferences,omitempty"`
+	ServiceReferences []ServiceReference `json:"serviceReferences,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:resource:scope=Cluster
+//+kubebuilder:printcolumn:name="Server-Addr",type=string,JSONPath=`.spec.serverAddr`
+//+kubebuilder:printcolumn:name="Server-Port",type=string,JSONPath=`.spec.serverPort`
+//+kubebuilder:printcolumn:name="External-IPs",type=string,JSONPath=`.spec.externalIPs`
+//+kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // FrpServer is the Schema for the frpservers API
 type FrpServer struct {

@@ -9,4 +9,10 @@ metadata:
     app.kubernetes.io/created-by: frp-provisioner
   name: frpserver-sample
 spec:
-  # TODO(user): Add fields here
+  auth:
+    token: "test"
+  serverAddr: 172.16.0.121
+  externalIPs: [ "172.16.0.121" ]
+  transport:
+    tls:
+      enable: false

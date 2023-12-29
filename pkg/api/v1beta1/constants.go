@@ -15,3 +15,9 @@ limitations under the License.
 */
 
 package v1beta1
+
+const (
+	FinalizerName              string = "finalizer.gofrp.io/tracking"
+	LabelServiceNameKey        string = "gofrp.io/service-name"
+	AnnotationFrpServerNameKey string = "service.beta.kubernetes.io/frp-server-name"
+)

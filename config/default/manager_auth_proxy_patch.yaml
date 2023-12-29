@@ -37,3 +37,6 @@ spec:
         - "--manager.health-probe-bind-address=:8081"
         - "--manager.metrics-bind-address=127.0.0.1:8080"
         - "--manager.leader-election"
+
+
+

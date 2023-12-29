@@ -34,10 +34,6 @@ const (
 	shortDescribe = "A fast reverse proxy to help you expose kubernetes service behind a NAT or firewall to the internet."
 )
 
-func init() {
-	ctrl.SetLogger(zapr.NewLogger(log.WithoutContext()))
-}
-
 // NewManagerCommand create a new *cobra.Command for controller-manager
 func NewManagerCommand(baseCtx context.Context) *cobra.Command {
 	cleanFlagSet := pflag.NewFlagSet(component, pflag.ContinueOnError)
@@ -75,12 +71,8 @@ func NewManagerCommand(baseCtx context.Context) *cobra.Command {
 			if err := managerFlags.Validate(); err != nil {
 				return err
 			}
-			strictErrors, err := options.LoadConfigFile(managerFlags.ConfigFile, cfg)
-			if err != nil {
+			if err := options.LoadConfigFile(managerFlags.ConfigFile, cfg); err != nil {
 				return fmt.Errorf("config file %s contains errors: %v", managerFlags.ConfigFile, err)
-			}
-			if len(strictErrors) > 0 {
-				return fmt.Errorf("config file %s contains strict errors: %v", managerFlags.ConfigFile, strictErrors)
 			}
 			if err := options.FlagPrecedence(args, cfg); err != nil {
 				return err
@@ -94,9 +86,7 @@ func NewManagerCommand(baseCtx context.Context) *cobra.Command {
 			}
 			log.ReplaceGlobals(logger)
 			ctrl.SetLogger(zapr.NewLogger(logger))
-
 			ctx = log.NewContext(ctx, logger)
-
 			srv, err := server.New(ctx, cfg)
 			if err != nil {
 				return fmt.Errorf("cannot create frp-provisioner server: %v", err)

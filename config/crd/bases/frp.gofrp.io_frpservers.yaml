@@ -14,7 +14,23 @@ spec:
     singular: frpserver
   scope: Cluster
   versions:
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.serverAddr
+      name: Server-Addr
+      type: string
+    - jsonPath: .spec.serverPort
+      name: Server-Port
+      type: string
+    - jsonPath: .spec.externalIPs
+      name: External-IPs
+      type: string
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: FrpServer is the Schema for the frpservers API
@@ -338,31 +354,19 @@ spec:
               serviceReferences:
                 description: Services is a list of all services
                 items:
+                  description: ServiceReference represents a Service Reference. It
+                    has enough information to retrieve service in any namespace
                   properties:
-                    apiGroup:
-                      description: APIGroup is the group for the resource being referenced.
-                        If APIGroup is not specified, the specified Kind must be in
-                        the core API group. For any other third-party types, APIGroup
-                        is required.
-                      type: string
-                    kind:
-                      description: Kind is the type of resource being referenced
-                      type: string
                     name:
-                      description: Name is the name of resource being referenced
+                      description: name is unique within a namespace to reference
+                        a secret resource.
                       type: string
                     namespace:
-                      description: Namespace is the namespace of resource being referenced
-                        Note that when a namespace is specified, a gateway.networking.k8s.io/ReferenceGrant
-                        object is required in the referent namespace to allow that
-                        namespace's owner to accept the reference. See the ReferenceGrant
-                        documentation for details. (Alpha) This field requires the
-                        CrossNamespaceVolumeDataSource feature gate to be enabled.
+                      description: namespace defines the space within which the secret
+                        name must be unique.
                       type: string
-                  required:
-                  - kind
-                  - name
                   type: object
+                  x-kubernetes-map-type: atomic
                 type: array
             required:
             - phase

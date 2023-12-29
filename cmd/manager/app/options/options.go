@@ -14,16 +14,13 @@
 package options
 
 import (
-	"github.com/frp-sigs/frp-provisioner/pkg/utils"
+	"errors"
+	"github.com/fatedier/frp/pkg/util/util"
 	"github.com/spf13/pflag"
 	"os"
 )
 
-import (
-	"errors"
-)
-
-const defaultConfigFile = "/etc/manager/config.toml"
+const defaultConfigFile = "/etc/manager/config.yaml"
 
 // ManagerFlags contains the command line parameters of the frp-provisioner.
 // If any of the following conditions are met, the configuration field should be in CompassFlags instead of CompassConfiguration:
@@ -52,7 +49,7 @@ func (f *ManagerFlags) Validate() error {
 
 // SetDefaults sets the default values.
 func (f *ManagerFlags) SetDefaults() {
-	f.ConfigFile = utils.EmptyOr(f.ConfigFile, defaultConfigFile)
+	f.ConfigFile = util.EmptyOr(f.ConfigFile, defaultConfigFile)
 }
 
 // AddFlags  adds flags to the specified FlagSet

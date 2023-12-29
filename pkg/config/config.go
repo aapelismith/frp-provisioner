@@ -16,6 +16,7 @@ package config
 import (
 	"errors"
 	"fmt"
+
 	"github.com/frp-sigs/frp-provisioner/pkg/log"
 	"github.com/spf13/pflag"
 )
@@ -23,9 +24,9 @@ import (
 // Configuration is the controller configuration.
 type Configuration struct {
 	// Log is the log options struct for zap logger
-	Log *log.Options `yaml:"log,omitempty" json:"log,omitempty"`
+	Log *log.Options `json:"log,omitempty"`
 	// Manager is the controller-manager options for controller-runtime
-	Manager *ManagerOptions `yaml:"manager,omitempty" json:"manager,omitempty"`
+	Manager *ManagerOptions `json:"manager,omitempty"`
 }
 
 // AddFlags adds flags for a specific configuration to the specified FlagSet
@@ -41,20 +42,20 @@ func (c *Configuration) SetDefaults() {
 }
 
 // Validate validates a specific configuration.
-func (c *Configuration) Validate() (err error) {
+func (c *Configuration) Validate() (errs error) {
 	if err := c.Log.Validate(); err != nil {
-		err = errors.Join(err, fmt.Errorf("invalid log config, got: '%w'", err))
+		errs = errors.Join(errs, fmt.Errorf("invalid log config, got: '%w'", err))
 	}
 	if err := c.Manager.Validate(); err != nil {
-		err = errors.Join(err, fmt.Errorf("invalid manager config, got: '%w'", err))
+		errs = errors.Join(errs, fmt.Errorf("invalid manager config, got: '%w'", err))
 	}
-	return err
+	return errs
 }
 
 // NewConfiguration create Configuration
 func NewConfiguration() *Configuration {
 	return &Configuration{
 		Log:     log.NewOptions(),
-		Manager: NewManagerOptions(),
+		Manager: &ManagerOptions{},
 	}
 }

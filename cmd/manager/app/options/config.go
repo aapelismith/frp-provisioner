@@ -14,12 +14,10 @@
 package options
 
 import (
-	gojson "encoding/json"
 	"github.com/frp-sigs/frp-provisioner/pkg/config"
-	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/pflag"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"os"
-	"sigs.k8s.io/json"
 )
 
 // FlagPrecedence The Flag of the frp-provisioner is parsed again.
@@ -35,18 +33,10 @@ func FlagPrecedence(args []string, c *config.Configuration) error {
 }
 
 // LoadConfigFile Load the configuration file from disk and populate the structure Configuration
-func LoadConfigFile(filename string, c *config.Configuration) (strictErrors []error, err error) {
-	var payload any
-	tomlData, err := os.ReadFile(filename)
+func LoadConfigFile(filename string, c *config.Configuration) error {
+	data, err := os.ReadFile(filename)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if err := toml.Unmarshal(tomlData, &payload); err != nil {
-		return nil, err
-	}
-	jsonData, err := gojson.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-	return json.UnmarshalStrict(jsonData, c)
+	return yaml.UnmarshalStrict(data, c)
 }

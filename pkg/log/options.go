@@ -14,11 +14,11 @@
 package log
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"k8s.io/apimachinery/pkg/util/errors"
 )
 
 var (
@@ -170,15 +170,20 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 }
 
 // Validate verify the configuration and return an error if correct
-func (o *Options) Validate() error {
-	errs := make([]error, 0)
-
-	// TODO: add more validation
+func (o *Options) Validate() (err error) {
+	// Check if encoding is empty
 	if o.Encoding == "" {
-		errs = append(errs, fmt.Errorf("log.encoding is required"))
+		err = errors.Join(err, fmt.Errorf("log.encoding is required"))
 	}
-
-	return errors.NewAggregate(errs)
+	// Check if  OutputPaths  is empty
+	if len(o.OutputPaths) == 0 {
+		err = errors.Join(err, fmt.Errorf("log.outputPaths is required"))
+	}
+	// Check if ErrorOutputPaths is empty
+	if len(o.ErrorOutputPaths) == 0 {
+		err = errors.Join(err, fmt.Errorf("log.errorOutputPaths is required"))
+	}
+	return err
 }
 
 // NewOptions returns a `zero` instance

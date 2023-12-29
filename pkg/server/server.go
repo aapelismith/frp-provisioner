@@ -6,17 +6,15 @@ import (
 	"github.com/frp-sigs/frp-provisioner/pkg/api/v1beta1"
 	"github.com/frp-sigs/frp-provisioner/pkg/config"
 	"github.com/frp-sigs/frp-provisioner/pkg/controller"
-	"github.com/frp-sigs/frp-provisioner/pkg/log"
-	webhook2 "github.com/frp-sigs/frp-provisioner/pkg/webhook"
-	"go.uber.org/zap"
+	"github.com/frp-sigs/frp-provisioner/pkg/utils/fieldindex"
+	"github.com/frp-sigs/frp-provisioner/pkg/validator"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"net"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"strconv"
-	"time"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -25,9 +23,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
-
-// default re-sync period for all informer factories
-const defaultRsync = 600 * time.Second
 
 var (
 	scheme = runtime.NewScheme()
@@ -50,7 +45,7 @@ func (s *Server) Start(ctx context.Context) error {
 	logger.Info("Starting frp-provisioner controller")
 
 	if err := s.mgr.Start(ctx); err != nil {
-		logger.With(zap.Error(err)).Error("Unable running frp-provisioner controller")
+		logger.Error(err, "Unable running frp-provisioner controller")
 		return fmt.Errorf("unable running frp-provisioner controller, got: %w", err)
 	}
 	return nil
@@ -59,22 +54,19 @@ func (s *Server) Start(ctx context.Context) error {
 // New create frp-provisioner controller server
 func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 	logger := log.FromContext(ctx)
-
 	webhookHost, port, err := net.SplitHostPort(cfg.Manager.WebhookBindAddress)
 	if err != nil {
-		logger.With(zap.Error(err)).Error("unable to split host and port")
+		logger.Error(err, "unable to split host and port")
 		return nil, fmt.Errorf("unable to split host and port, got: '%w'", err)
 	}
-
 	webhookPort := webhook.DefaultPort
 	if port == "" {
 		webhookPort, err = strconv.Atoi(port)
 		if err != nil {
-			logger.With(zap.Error(err)).Error("unable to convert port to number")
+			logger.Error(err, "unable to convert port to number")
 			return nil, fmt.Errorf("unable to convert port to number, got: '%w'", err)
 		}
 	}
-
 	webhookOpts := webhook.Options{
 		Host:         webhookHost,
 		Port:         webhookPort,
@@ -83,7 +75,6 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		KeyName:      cfg.Manager.WebhookKeyName,
 		ClientCAName: cfg.Manager.WebhookClientCAName,
 	}
-
 	metricsOpts := metricsserver.Options{
 		CertDir:       cfg.Manager.MetricsCertDir,
 		CertName:      cfg.Manager.MetricsCertName,
@@ -91,7 +82,6 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		SecureServing: cfg.Manager.MetricsSecureServing,
 		BindAddress:   cfg.Manager.MetricsBindAddress,
 	}
-
 	opts := ctrl.Options{
 		Scheme:                        scheme,
 		LeaderElection:                cfg.Manager.LeaderElection,
@@ -105,48 +95,50 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		Metrics:                       metricsOpts,
 		WebhookServer:                 webhook.NewServer(webhookOpts),
 		HealthProbeBindAddress:        cfg.Manager.HealthProbeBindAddress,
-		ReadinessEndpointName:         cfg.Manager.ReadinessEndpointName,
-		LivenessEndpointName:          cfg.Manager.LivenessEndpointName,
 		PprofBindAddress:              cfg.Manager.PprofBindAddress,
 		GracefulShutdownTimeout:       &cfg.Manager.GracefulShutdownTimeout,
 	}
-
 	kubeConfig, err := ctrl.GetConfig()
 	if err != nil {
-		logger.With(zap.Error(err)).Error("unable to get kubernetes config")
+		logger.Error(err, "unable to get kubernetes config")
 		return nil, fmt.Errorf("unable to get kubernetes config, got: '%w'", err)
 	}
-
 	mgr, err := ctrl.NewManager(kubeConfig, opts)
 	if err != nil {
-		logger.With(zap.Error(err)).Error("unable to start manager")
+		logger.Error(err, "unable to start manager")
 		return nil, fmt.Errorf("unable to start manager, got: '%w'", err)
 	}
-
-	if err := (&controller.ServerReconciler{
+	err = fieldindex.RegisterFieldIndexes(ctx, mgr.GetCache())
+	if err != nil {
+		logger.Error(err, "unable  Register Field Indexes to cache")
+		return nil, fmt.Errorf("unable  RegisterFieldIndexes to cache got: '%w'", err)
+	}
+	if err := (&controller.ServiceReconciler{
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Options: cfg.Manager,
+	}).SetupWithManager(mgr); err != nil {
+		logger.Error(err, "unable to setup server reconciler", "controller", "ServiceReconciler")
+		return nil, fmt.Errorf("unable to setup server reconciler, got: %w", err)
+	}
+	if err := (&controller.FrpServerReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		logger.With(zap.Error(err), zap.String("controller",
-			"ServerReconciler")).Error("unable to setup server reconciler")
-		return nil, fmt.Errorf("unable to setup server reconciler, got: %w", err)
+		logger.Error(err, "unable to setup frpserver reconciler", "controller", "FrpServerReconciler")
+		return nil, fmt.Errorf("unable to setup frpserver reconciler, got: %w", err)
 	}
-
-	if err = (&webhook2.FrpServer{}).SetupWebhookWithManager(mgr); err != nil {
-		logger.With(zap.Error(err), zap.String("webhook",
-			"FrpServer")).Error("unable to create webhook")
-		return nil, fmt.Errorf("unable to setup FrpServer webhook, got: %w", err)
+	if err = (&validator.FrpServerValidator{}).SetupWebhookWithManager(mgr); err != nil {
+		logger.Error(err, "unable to create webhook", "webhook", "FrpServerValidator")
+		return nil, fmt.Errorf("unable to setup FrpServerValidator webhook, got: %w", err)
 	}
-
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		logger.With(zap.Error(err)).Error("unable to set up health check")
+		logger.Error(err, "unable to set up health check")
 		return nil, fmt.Errorf("unable to set up health check, got: %w", err)
 	}
-
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		logger.With(zap.Error(err)).Error("unable to set up ready check")
+		logger.Error(err, "unable to set up ready check")
 		return nil, fmt.Errorf("unable to set up ready check, got: %w", err)
 	}
-
 	return &Server{mgr: mgr, cfg: cfg}, nil
 }
