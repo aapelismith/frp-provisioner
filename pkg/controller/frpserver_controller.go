@@ -20,8 +20,7 @@ import (
 	"context"
 	"fmt"
 	frpv1beta1 "github.com/frp-sigs/frp-provisioner/pkg/api/v1beta1"
-	"github.com/frp-sigs/frp-provisioner/pkg/utils/frp"
-	"github.com/frp-sigs/frp-provisioner/pkg/utils/validate"
+	"github.com/frp-sigs/frp-provisioner/pkg/utils/frpclient"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,22 +65,7 @@ func (r *FrpServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, utilerrors.NewAggregate([]error{err, r.Status().Update(ctx, &obj)})
 	}
 
-	commonConfig, err := frp.GenClientCommonConfig(ctx, r.Client, &obj)
-	if err != nil {
-		logger.Error(err, "Error generate frp config from resource object")
-		meta.SetStatusCondition(&obj.Status.Conditions, metav1.Condition{
-			Type:               "Initialized",
-			Status:             metav1.ConditionTrue,
-			Reason:             frpv1beta1.ReasonGenerateConfigFailed,
-			LastTransitionTime: metav1.NewTime(time.Now()),
-			Message:            fmt.Sprintf("unable to generate frp config: %s", err.Error()),
-		})
-		obj.Status.Phase = frpv1beta1.FrpServerPhaseUnhealthy
-		obj.Status.Reason = fmt.Sprintf("unable to generate frp config: %s", err.Error())
-		return ctrl.Result{}, utilerrors.NewAggregate([]error{err, r.Status().Update(ctx, &obj)})
-	}
-
-	err = validate.ValidateClientCommonConfig(ctx, commonConfig)
+	err = frpclient.ValidateFrpServerConfig(ctx, r.Client, &obj)
 	if err != nil {
 		logger.Error(err, "Invalid frp config from resource object")
 		meta.SetStatusCondition(&obj.Status.Conditions, metav1.Condition{

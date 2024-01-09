@@ -1,0 +1,14 @@
+FROM curlimages/curl as curl
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION
+RUN mkdir /tmp/frp/ && \
+    wget -qO- --no-check-certificate \
+    https://github.com/fatedier/frp/releases/download/v${VERSION:-0.53.2}/frp_${VERSION:-0.53.2}_${TARGETOS:-linux}_${TARGETARCH:-$(dpkg --print-architecture)}.tar.gz | \
+    tar xvz -C /tmp/
+
+FROM ubuntu:focal
+RUN mkdir -p /etc/frp
+COPY --from=curl /tmp/*/frpc /usr/local/bin
+COPY --from=curl /tmp/*/frpc.toml /etc/frp/frpc.toml
+ENTRYPOINT ["/usr/local/bin/frpc", "--config", "/etc/frp/frpc.toml"]

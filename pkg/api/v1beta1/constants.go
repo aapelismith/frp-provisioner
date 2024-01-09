@@ -16,8 +16,31 @@ limitations under the License.
 
 package v1beta1
 
+var (
+	FrpServerAuthMethods = []FrpServerAuthMethod{
+		FrpServerAuthMethodToken,
+		FrpServerAuthMethodOIDC,
+	}
+	FrpServerAuthScopes = []FrpServerAuthScope{
+		FrpServerAuthScopeHeartBeats,
+		FrpServerAuthScopeNewWorkConns,
+	}
+	FrpServerTransportProtocols = []FrpServerTransportProtocol{
+		FrpServerTransportProtocolTCP,
+		FrpServerTransportProtocolKCP,
+		FrpServerTransportProtocolQUIC,
+		FrpServerTransportProtocolWSS,
+		FrpServerTransportProtocolWebsocket,
+	}
+)
+
 const (
 	FinalizerName              string = "finalizer.gofrp.io/tracking"
 	LabelServiceNameKey        string = "gofrp.io/service-name"
 	AnnotationFrpServerNameKey string = "service.beta.kubernetes.io/frp-server-name"
+
+	DefaultCaFileName      = "tls.ca"
+	DefaultCertFileName    = "tls.crt"
+	DefaultKeyFileName     = "tls.key"
+	DefaultNatHoleSTUNAddr = "stun.easyvoip.com:3478"
 )

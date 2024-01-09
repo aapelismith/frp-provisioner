@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"github.com/fatedier/frp/pkg/util/util"
 	"github.com/spf13/pflag"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	"os"
 	"path/filepath"
 	"sigs.k8s.io/yaml"

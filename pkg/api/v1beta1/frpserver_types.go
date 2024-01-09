@@ -165,19 +165,8 @@ type FrpServerTransportQUIC struct {
 }
 
 type FrpServerTransportTLS struct {
-	// Enable specifies whether TLS should be used when communicating
-	// with the server. If "tls.certFile" and "tls.keyFile" are valid,
-	// client will load the supplied tls configuration.
-	// Since v0.50.0, the default value has been changed to true, and tls is enabled by default.
-	Enable *bool `json:"enable,omitempty"`
 	// SecretRef is name of the tls secret for transport. It provided tls key, cert and CA file
 	SecretRef *v1.SecretReference `json:"secretRef,omitempty"`
-	// CertFileName specifies the filename of the cert file on secretRef.
-	CertFileName string `json:"certFileName,omitempty"`
-	// KeyFileName specifies the filename of the secret key file on secretRef.
-	KeyFileName string `json:"keyFileName,omitempty"`
-	// CaFileName specifies the filename of the trusted ca file on secretRef.
-	CaFileName string `json:"caFileName,omitempty"`
 	// ServerName specifies the custom server name of tls certificate. By
 	// default, server name if same to ServerAddr.
 	ServerName string `json:"serverName,omitempty"`
