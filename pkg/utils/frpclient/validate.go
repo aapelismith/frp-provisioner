@@ -169,12 +169,12 @@ func ValidateFrpServerConfig(ctx context.Context, cli client.Client, obj *v1beta
 		logger       = log.FromContext(ctx)
 		authSetter   = auth.NewAuthSetter(commonConfig.Auth)
 	)
-	connMgr := frpclient.NewConnectionManager(ctx, &commonConfig)
+	connMgr := frpclient.NewConnector(ctx, &commonConfig)
 	defer func() {
 		_ = connMgr.Close()
 	}()
 
-	if err := connMgr.OpenConnection(); err != nil {
+	if err := connMgr.Open(); err != nil {
 		logger.Error(err, "Error open frp connection manager conn")
 		return err
 	}
