@@ -107,7 +107,7 @@ func (f *FrpServerValidator) ValidateCreate(ctx context.Context, object runtime.
 }
 
 // ValidateUpdate implements admission.CustomValidator so a webhook will be registered for the type
-func (f *FrpServerValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (warnings admission.Warnings, errs error) {
+func (f *FrpServerValidator) ValidateUpdate(ctx context.Context, _, newObj runtime.Object) (warnings admission.Warnings, errs error) {
 	obj := newObj.(*v1beta1.FrpServer)
 	if !lo.Contains(v1beta1.FrpServerAuthMethods, obj.Spec.Auth.Method) {
 		errs = errors.Join(errs, fmt.Errorf("invalid spec.auth.method, optional values are %+v", v1beta1.FrpServerAuthMethods))
@@ -155,6 +155,6 @@ func (f *FrpServerValidator) ValidateUpdate(ctx context.Context, oldObj, newObj 
 }
 
 // ValidateDelete implements admission.CustomValidator so a webhook will be registered for the type
-func (f *FrpServerValidator) ValidateDelete(ctx context.Context, object runtime.Object) (warnings admission.Warnings, err error) {
+func (f *FrpServerValidator) ValidateDelete(_ context.Context, _ runtime.Object) (warnings admission.Warnings, err error) {
 	return warnings, err
 }
