@@ -1,4 +1,4 @@
-package validator
+package controller
 
 import (
 	"context"
@@ -16,10 +16,10 @@ import (
 
 type FrpServerValidator struct {
 	client.Client
+	Scheme *runtime.Scheme
 }
 
 func (f *FrpServerValidator) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	f.Client = mgr.GetClient()
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&v1beta1.FrpServer{}).
 		WithDefaulter(f).

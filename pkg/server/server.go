@@ -7,7 +7,6 @@ import (
 	"github.com/frp-sigs/frp-provisioner/pkg/config"
 	"github.com/frp-sigs/frp-provisioner/pkg/controller"
 	"github.com/frp-sigs/frp-provisioner/pkg/utils/fieldindex"
-	"github.com/frp-sigs/frp-provisioner/pkg/validator"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"net"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -128,7 +127,10 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		logger.Error(err, "unable to setup frpserver reconciler", "controller", "FrpServerReconciler")
 		return nil, fmt.Errorf("unable to setup frpserver reconciler, got: %w", err)
 	}
-	if err = (&validator.FrpServerValidator{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&controller.FrpServerValidator{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWebhookWithManager(mgr); err != nil {
 		logger.Error(err, "unable to create webhook", "webhook", "FrpServerValidator")
 		return nil, fmt.Errorf("unable to setup FrpServerValidator webhook, got: %w", err)
 	}
