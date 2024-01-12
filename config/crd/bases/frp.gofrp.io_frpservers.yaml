@@ -211,14 +211,6 @@ spec:
                     description: TLS specifies TLS settings for the connection to
                       the server.
                     properties:
-                      caFileName:
-                        description: CaFileName specifies the filename of the trusted
-                          ca file on secretRef.
-                        type: string
-                      certFileName:
-                        description: CertFileName specifies the filename of the cert
-                          file on secretRef.
-                        type: string
                       disableCustomTLSFirstByte:
                         description: If DisableCustomTLSFirstByte is set to false,
                           frpc will establish a connection with frps using the first
@@ -226,17 +218,6 @@ spec:
                           value has been changed to true, and the first custom byte
                           is disabled by default.
                         type: boolean
-                      enable:
-                        description: Enable specifies whether TLS should be used when
-                          communicating with the server. If "tls.certFile" and "tls.keyFile"
-                          are valid, client will load the supplied tls configuration.
-                          Since v0.50.0, the default value has been changed to true,
-                          and tls is enabled by default.
-                        type: boolean
-                      keyFileName:
-                        description: KeyFileName specifies the filename of the secret
-                          key file on secretRef.
-                        type: string
                       secretRef:
                         description: SecretRef is name of the tls secret for transport.
                           It provided tls key, cert and CA file

@@ -11,20 +11,4 @@
  * limitations under the License.
  */
 
-package main
-
-import (
-	"github.com/frp-sigs/frp-provisioner/cmd/manager/app"
-	"github.com/frp-sigs/frp-provisioner/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
-)
-
-func main() {
-	l := log.WithoutContext()
-	stopCtx := signals.SetupSignalHandler()
-	cmd := app.NewManagerCommand(stopCtx)
-
-	if err := cmd.Execute(); err != nil {
-		l.Fatal(err.Error())
-	}
-}
+package env

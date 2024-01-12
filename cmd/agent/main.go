@@ -14,7 +14,7 @@
 package main
 
 import (
-	"github.com/frp-sigs/frp-provisioner/cmd/manager/app"
+	"github.com/frp-sigs/frp-provisioner/cmd/agent/app"
 	"github.com/frp-sigs/frp-provisioner/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
@@ -22,7 +22,7 @@ import (
 func main() {
 	l := log.WithoutContext()
 	stopCtx := signals.SetupSignalHandler()
-	cmd := app.NewManagerCommand(stopCtx)
+	cmd := app.NewAgentCommand(stopCtx)
 
 	if err := cmd.Execute(); err != nil {
 		l.Fatal(err.Error())

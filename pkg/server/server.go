@@ -32,14 +32,14 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 }
 
-// Server frp controller server
-type Server struct {
+// ManagerServer frp controller server
+type ManagerServer struct {
 	mgr ctrl.Manager
 	cfg *config.Configuration
 }
 
 // Start the frp-provisioner controller server
-func (s *Server) Start(ctx context.Context) error {
+func (s *ManagerServer) Start(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Starting frp-provisioner controller")
 
@@ -50,8 +50,8 @@ func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
-// New create frp-provisioner controller server
-func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
+// NewManagerServer create frp-provisioner controller server
+func NewManagerServer(ctx context.Context, cfg *config.Configuration) (*ManagerServer, error) {
 	logger := log.FromContext(ctx)
 	webhookHost, port, err := net.SplitHostPort(cfg.Manager.WebhookBindAddress)
 	if err != nil {
@@ -142,5 +142,5 @@ func New(ctx context.Context, cfg *config.Configuration) (*Server, error) {
 		logger.Error(err, "unable to set up ready check")
 		return nil, fmt.Errorf("unable to set up ready check, got: %w", err)
 	}
-	return &Server{mgr: mgr, cfg: cfg}, nil
+	return &ManagerServer{mgr: mgr, cfg: cfg}, nil
 }

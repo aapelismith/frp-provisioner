@@ -1,14 +1,12 @@
 
 # Image URL to use all building/pushing image targets
 IMG ?= frp-provisioner:latest
-# ENV_TEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENV_TEST_K8S_VERSION = 1.28.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
+	GOBIN=$(shell go env GOPATH)/bin
 else
-GOBIN=$(shell go env GOBIN)
+	GOBIN=$(shell go env GOBIN)
 endif
 
 # CONTAINER_TOOL defines the container tool to be used for building images.
@@ -60,10 +58,6 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
-.PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENV_TEST_K8S_VERSION) --bin-dir $(GOBIN) -p path)" go test ./... -coverprofile cover.out
-
 ##@ Build
 
 .PHONY: build
@@ -94,16 +88,12 @@ docker-push: ## Push docker image with the manager.
 PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
-	# copy existing Dockerfile and insert --platform=${BUILD_PLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILD_PLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILD_PLATFORM\}/' Dockerfile > Dockerfile.cross
 	- $(CONTAINER_TOOL) buildx create --name project-v3-builder
 	$(CONTAINER_TOOL) buildx use project-v3-builder
-	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
+	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile .
 	- $(CONTAINER_TOOL) buildx rm project-v3-builder
-	rm Dockerfile.cross
 
 ##@ Deployment
-
 ifndef ignore-not-found
   ignore-not-found = false
 endif
@@ -131,7 +121,6 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 KUBECTL ?= kubectl
 KUSTOMIZE ?= $(GOBIN)/kustomize
 CONTROLLER_GEN ?= $(GOBIN)/controller-gen
-ENVTEST ?= $(GOBIN)/setup-envtest
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.1.1
@@ -151,8 +140,3 @@ controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessar
 $(CONTROLLER_GEN): $(GOBIN)
 	test -s $(GOBIN)/controller-gen && $(GOBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
 	GOBIN=$(GOBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
-
-.PHONY: envtest
-envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
-$(ENVTEST): $(GOBIN)
-	test -s $(GOBIN)/setup-envtest || GOBIN=$(GOBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest

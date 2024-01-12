@@ -37,6 +37,7 @@ var (
 const (
 	FinalizerName              string = "finalizer.gofrp.io/tracking"
 	LabelServiceNameKey        string = "gofrp.io/service-name"
+	LabelControllerUidKey      string = "gofrp.io/controller-uid"
 	AnnotationFrpServerNameKey string = "service.beta.kubernetes.io/frp-server-name"
 
 	DefaultCaFileName      = "tls.ca"

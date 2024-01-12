@@ -22,12 +22,10 @@ import (
 	"github.com/frp-sigs/frp-provisioner/pkg/api/v1beta1"
 	"github.com/frp-sigs/frp-provisioner/pkg/config"
 	controllerutils "github.com/frp-sigs/frp-provisioner/pkg/utils/controller"
-	"github.com/frp-sigs/frp-provisioner/pkg/utils/fieldindex"
 	"github.com/samber/lo"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -35,11 +33,11 @@ import (
 	"k8s.io/apiserver/pkg/storage/names"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// controllerKind contains the schema.GroupVersionKind for this controller type.
-var controllerKind = v1.SchemeGroupVersion.WithKind("Service")
+const defaultBaseName = "frp-client"
 
 // ServiceReconciler reconciles a FrpServer object
 type ServiceReconciler struct {
@@ -53,8 +51,9 @@ func (r *ServiceReconciler) getOwnedPods(ctx context.Context, instance *v1.Servi
 	podList := &v1.PodList{}
 	opts := &client.ListOptions{
 		Namespace: instance.Namespace,
-		FieldSelector: fields.SelectorFromSet(fields.Set{
-			fieldindex.IndexNameForOwnerRefUID: string(instance.UID),
+		LabelSelector: labels.SelectorFromSet(labels.Set{
+			v1beta1.LabelServiceNameKey:   instance.Name,
+			v1beta1.LabelControllerUidKey: string(instance.UID),
 		}),
 	}
 	if err := r.List(ctx, podList, opts); err != nil {
@@ -71,6 +70,31 @@ func (r *ServiceReconciler) getOwnedPods(ctx context.Context, instance *v1.Servi
 		}
 	}
 	return activePods, inactivePods, nil
+}
+
+func (r *ServiceReconciler) generatePod(ctx context.Context, owner *v1.Service) (*v1.Pod, error) {
+	logger := log.FromContext(ctx)
+	pod := &v1.Pod{}
+	if err := yaml.Unmarshal([]byte(r.Options.PodTemplate), pod); err != nil {
+		logger.Error(err, "unable parse yaml from pod template", "template", r.Options.PodTemplate)
+		return nil, fmt.Errorf("unable parse yaml from pod template, err: %w", err)
+	}
+	if pod.GetLabels() == nil {
+		pod.SetLabels(make(map[string]string))
+	}
+	baseName := defaultBaseName
+	if pod.GetName() != "" {
+		baseName = pod.GetName()
+	}
+	pod.SetNamespace(owner.Namespace)
+	pod.SetName(names.SimpleNameGenerator.GenerateName(baseName + "-" + owner.Name))
+	if err := controllerutil.SetControllerReference(owner, pod, r.Scheme); err != nil {
+		logger.Error(err, "can't set Pod owner reference", "namespace", pod.GetNamespace(), "name", pod.GetName())
+		return nil, fmt.Errorf("can't set Pod '%v/%v' owner reference: %w", pod.GetNamespace(), pod.GetName(), err)
+	}
+	pod.Labels[v1beta1.LabelServiceNameKey] = owner.Name
+	pod.Labels[v1beta1.LabelControllerUidKey] = string(owner.UID)
+	return pod, nil
 }
 
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update;patch
@@ -119,14 +143,14 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		instance.Annotations[v1beta1.AnnotationFrpServerNameKey] == "" || instance.DeletionTimestamp != nil {
 		for _, pod := range claimedPods {
 			if err := r.Delete(ctx, pod); err != nil && !errors.IsNotFound(err) {
-				logger.Error(err, "unable delete pod for service", "podName", pod.Name)
-				errsList = append(errsList, err)
+				logger.Error(err, "unable delete pod for service", "podName", pod.GetName(), "service", req)
+				errsList = append(errsList, fmt.Errorf("unable delete pod '%s', err: %w", req.String(), err))
 			}
 		}
 		instance.Finalizers = lo.Without(instance.Finalizers, v1beta1.FinalizerName)
 		if err := r.Update(ctx, instance); err != nil {
-			logger.Error(err, "unable remove finalizers for service", "key", req.String())
-			errsList = append(errsList, err)
+			logger.Error(err, "unable remove finalizers for service", "service", req.String())
+			errsList = append(errsList, fmt.Errorf("unable remove finalizers for service '%s', err: %w", req.String(), err))
 		}
 		return ctrl.Result{}, utilerrors.NewAggregate(errsList)
 	}
@@ -134,34 +158,19 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if !lo.Contains(instance.Finalizers, v1beta1.FinalizerName) {
 		instance.Finalizers = append(instance.Finalizers, v1beta1.FinalizerName)
 		if err := r.Update(ctx, instance); err != nil {
-			logger.Error(err, "unable add finalizers for service", "key", req.String())
-			return ctrl.Result{}, err
+			logger.Error(err, "unable add finalizers for service", "service", req.String())
+			return ctrl.Result{}, fmt.Errorf("unable add finalizers for service '%s', err: %w", req.String(), err)
 		}
 	}
 	if len(claimedPods) == 0 {
-		pod := &v1.Pod{}
-		if err := yaml.Unmarshal([]byte(r.Options.PodTemplate), pod); err != nil {
-			logger.Error(err, "unable parse yaml from podTemplate", "podTemplate", r.Options.PodTemplate)
-			return ctrl.Result{}, err
+		pod, err := r.generatePod(ctx, instance)
+		if err != nil {
+			logger.Error(err, "unable generate pod from podTemplate")
+			return ctrl.Result{}, fmt.Errorf("unable generate pod from podTemplate, err: %w", err)
 		}
-		pod.SetNamespace(instance.Namespace)
-		pod.SetName(names.SimpleNameGenerator.GenerateName(pod.Name + "-" + instance.Name))
-		if pod.Labels == nil {
-			pod.Labels = make(map[string]string)
-		}
-		apiVersion := fmt.Sprintf("%s/%s", controllerKind.Group, controllerKind.Version)
-		pod.SetOwnerReferences([]metav1.OwnerReference{{
-			APIVersion:         apiVersion,
-			Kind:               controllerKind.Kind,
-			Name:               instance.Name,
-			UID:                instance.UID,
-			Controller:         lo.ToPtr(true),
-			BlockOwnerDeletion: lo.ToPtr(true),
-		}})
-		pod.Labels[v1beta1.LabelServiceNameKey] = instance.Name
 		if err := r.Create(ctx, pod); err != nil {
 			logger.Error(err, "unable create frp pod by template", "pod", fmt.Sprintf("%+v", pod))
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("unable create frp pod '%+v',err: %w", pod, err)
 		}
 	}
 	return ctrl.Result{}, nil
@@ -206,7 +215,8 @@ func (r *ServiceReconciler) getFrpServers(ctx context.Context, instance v1.Servi
 
 func (r *ServiceReconciler) claimPods(instance *v1.Service, pods []*v1.Pod) ([]*v1.Pod, error) {
 	selector := labels.SelectorFromSet(labels.Set{
-		v1beta1.LabelServiceNameKey: instance.Name,
+		v1beta1.LabelServiceNameKey:   instance.Name,
+		v1beta1.LabelControllerUidKey: string(instance.UID),
 	})
 	mgr, err := controllerutils.NewRefManager(r.Client, selector, instance, r.Scheme)
 	if err != nil {
